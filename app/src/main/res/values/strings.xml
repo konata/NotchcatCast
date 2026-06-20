@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="application_name">莽莽投屏</string>
+    <string name="player_play">播放</string>
+    <string name="player_playing">播放中</string>
+    <string name="player_paused">已暂停</string>
+    <string name="player_stopped">已停止</string>
+    <string name="player_buffering">缓冲中</string>
+    <string name="player_waiting">待播放</string>
+    <string name="seek_to">跳转到 %1$s</string>
+    <string name="seek_with_time">%1$s  %2$s</string>
+    <string name="seek_back_10s">-10s</string>
+    <string name="seek_forward_30s">+30s</string>
+    <string name="volume_value">音量 %1$d%%</string>
+    <string name="volume_muted">已静音</string>
+    <string name="landing_caption">安静待命，等你把喜欢的内容送到电视上。</string>
+    <string name="status_panel_title">连接状态</string>
+    <string name="status_panel_subtitle">确认手机和电视在同一网络下</string>
+    <string name="status_ready">待连接</string>
+    <string name="status_starting">启动中</string>
+    <string name="status_error_state">需要检查</string>
+    <string name="status_wifi_label">Wi-Fi</string>
+    <string name="status_address_label">地址</string>
+    <string name="status_service_label">服务</string>
+    <string name="status_multicast_label">组播</string>
+    <string name="status_running">运行中</string>
+    <string name="status_stopped">未启动</string>
+    <string name="status_locked">已就绪</string>
+    <string name="status_unlocked">未就绪</string>
+    <string name="notification_service_text">等待投屏</string>
+</resources>
