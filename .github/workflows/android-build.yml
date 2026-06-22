@@ -2,6 +2,14 @@ name: Android Build
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag. Defaults to v<versionName>.
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,8 +34,46 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
+      - name: Prepare APK
+        id: apk
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          version_name="$(sed -n 's/.*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
+          if [[ -z "$version_name" ]]; then
+            echo "Could not find versionName in app/build.gradle" >&2
+            exit 1
+          fi
+
+          tag="$INPUT_TAG"
+          if [[ -z "$tag" ]]; then
+            tag="v$version_name"
+          fi
+
+          apk="NotchCatCast-${tag//\//-}-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$apk"
+          {
+            echo "tag=$tag"
+            echo "apk=$apk"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: NotchCatCast-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.apk.outputs.apk }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.apk.outputs.tag }}
+          APK: ${{ steps.apk.outputs.apk }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "Notch Cat Cast $TAG" \
+              --notes "Manual debug APK build from ${GITHUB_SHA}."
+          fi
