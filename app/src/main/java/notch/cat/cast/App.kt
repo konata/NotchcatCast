@@ -165,7 +165,7 @@ class CastService : Service() {
   }
 
   private fun notification(): Notification {
-    val manager = getSystemService(NotificationManager::class.java)
+    val manager = getSystemService(NotificationManager::class.java)!!
     manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.application_name), NotificationManager.IMPORTANCE_LOW))
     val intent = PendingIntent.getActivity(this, 0, playerIntent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     return Notification.Builder(this, CHANNEL_ID).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.application_name)).setContentText(getString(R.string.notification_service_text))
@@ -288,6 +288,7 @@ class IndexActivity : ComponentActivity() {
   }
 
   override fun onStop() {
+    player.pause()
     closeSurface()
     super.onStop()
   }
@@ -307,7 +308,19 @@ class IndexActivity : ComponentActivity() {
     playerScope = null
   }
 
-  override fun dispatchKeyEvent(event: KeyEvent) = event.action == KeyEvent.ACTION_DOWN && key(event.keyCode) || super.dispatchKeyEvent(event)
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    val down = event.action == KeyEvent.ACTION_DOWN
+    when (event.keyCode) {
+      KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> if (down) seekBy(-10_000L, getString(R.string.seek_back_10s))
+      KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> if (down) seekBy(30_000L, getString(R.string.seek_forward_30s))
+      KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> if (down) CastSession.send(this, if (player.isPlaying) CastCommand.Pause else CastCommand.Play)
+      KeyEvent.KEYCODE_MEDIA_PLAY -> if (down) CastSession.send(this, CastCommand.Play)
+      KeyEvent.KEYCODE_MEDIA_PAUSE -> if (down) CastSession.send(this, CastCommand.Pause)
+      KeyEvent.KEYCODE_MEDIA_STOP -> if (down) CastSession.send(this, CastCommand.Stop)
+      else -> return super.dispatchKeyEvent(event)
+    }
+    return true
+  }
 
   private fun load(uri: String, play: Boolean) = onSurface {
     audioFallbackUsed = false
@@ -386,22 +399,6 @@ class IndexActivity : ComponentActivity() {
       StateStore.setError("Failed to load media: ${it.message}", it)
       setState(TransportState.Stopped)
     }
-  }
-
-  private fun key(keyCode: Int): Boolean {
-    when (keyCode) {
-      KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> seekBy(-10_000L, getString(R.string.seek_back_10s))
-      KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> seekBy(30_000L, getString(R.string.seek_forward_30s))
-      KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> CastSession.send(
-        this, if (player.isPlaying) CastCommand.Pause else CastCommand.Play
-      )
-
-      KeyEvent.KEYCODE_MEDIA_PLAY -> CastSession.send(this, CastCommand.Play)
-      KeyEvent.KEYCODE_MEDIA_PAUSE -> CastSession.send(this, CastCommand.Pause)
-      KeyEvent.KEYCODE_MEDIA_STOP -> CastSession.send(this, CastCommand.Stop)
-      else -> return false
-    }
-    return true
   }
 
   private fun seekBy(deltaMs: Long, label: String) {
@@ -589,7 +586,10 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     registerAirplay()
     serverScope.launch {
       delay(300)
-      ssdpTargets().forEach { sendNotify(it, "ssdp:alive") }
+      while (isActive) {
+        ssdpTargets().forEach { sendNotify(it, "ssdp:alive") }
+        delay(SSDP_ALIVE_INTERVAL_MS)
+      }
     }
     return info()
   }
@@ -611,7 +611,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
   private fun httpLoop(serverSocket: ServerSocket, serverScope: CoroutineScope) {
     while (serverScope.isActive) {
       val socket = try {
-        serverSocket.accept()
+        serverSocket.accept().apply { soTimeout = SOCKET_TIMEOUT_MS }
       } catch (error: Exception) {
         if (serverScope.isActive) StateStore.setError("HTTP server accept failed", error)
         break
@@ -1041,5 +1041,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     const val AIRPLAY_SOURCE_VERSION = "130.14"
     const val SERVER_HEADER = "Linux/5.15.170-android14-11-gf4a1f03072af HTTP/1.0 BDLE+DLNA/1.1 NotchCatCast/1.0"
     const val MAX_LOG_BODY = 2048
+    const val SOCKET_TIMEOUT_MS = 10_000
+    const val SSDP_ALIVE_INTERVAL_MS = 900_000L
   }
 }
