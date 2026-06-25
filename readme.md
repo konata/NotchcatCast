@@ -12,7 +12,7 @@
 
 Notch Cat Cast publishes a DLNA/UPnP `MediaRenderer` on the local network. Android video apps can discover it as a cast target, send a media URL through `AVTransport`, and let the Android TV device play that URL directly with Media3 ExoPlayer.
 
-It also publishes a minimal Airplay v1-style video target for iOS browser players that can hand off a normal MP4 or HLS URL. This path is intentionally narrow: it is for URL playback only, not screen mirroring or protected Apple media playback.
+It also publishes a minimal Airplay video target for iOS browser players that can hand off a normal MP4 or HLS URL. This path is intentionally narrow: it is for URL playback only, not screen mirroring or protected Apple media playback.
 
 The app was built to replace ad-injecting third-party cast receivers for normal phone-to-TV playback. It is not a Google Cast receiver and does not replace Chromecast's built-in Cast stack.
 
@@ -41,7 +41,7 @@ Most device-side testing was done on a Chromecast with Google TV, but the app is
 ## Known Limitations
 
 - This is not a Google Cast or LeLink receiver.
-- Airplay support is limited to ordinary URL playback. Airplay 2, screen mirroring, RAOP audio, FairPlay, and DRM playback are not supported.
+- Airplay support is limited to ordinary URL playback. Screen mirroring, RAOP audio, FairPlay, and DRM playback are not supported.
 - DRM streams, encrypted media URLs, and private app-specific request headers are not supported.
 - Compatibility is based on the domestic Android video apps tested above, not every DLNA controller.
 - Background launch behavior still depends on Android TV system restrictions.
