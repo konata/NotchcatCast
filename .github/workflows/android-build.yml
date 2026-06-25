@@ -51,7 +51,7 @@ jobs:
             tag="v$version_name"
           fi
 
-          apk="NotchCatCast-${tag//\//-}-debug.apk"
+          apk="NotchCatCast-debug.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
           {
             echo "tag=$tag"
