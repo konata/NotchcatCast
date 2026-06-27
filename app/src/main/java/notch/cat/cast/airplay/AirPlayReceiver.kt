@@ -47,7 +47,10 @@ class AirPlayReceiver(
 
   fun start(): Int {
     if (scope?.isActive == true) return server?.localPort ?: 0
-    val socket = ServerSocket(0)
+    val socket = runCatching { ServerSocket(AIRPLAY_PORT) }.getOrElse {
+      Log.w(TAG, "AirPlay port $AIRPLAY_PORT unavailable, using dynamic port", it)
+      ServerSocket(0)
+    }
     server = socket
     val activeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     scope = activeScope
@@ -267,14 +270,14 @@ class AirPlayReceiver(
     put("pi", uuid)
     put("pk", NSData(session.publicKey))
     put("sourceVersion", AIRPLAY_SOURCE_VERSION)
-    put("statusFlags", 68)
+    put("statusFlags", AIRPLAY_FLAGS)
     put("vv", 2)
   }
 
   private fun serverInfoPlist() = xmlPlist(
     """
     <key>deviceid</key><string>${deviceId()}</string>
-    <key>features</key><integer>119</integer>
+    <key>features</key><integer>$AIRPLAY_FEATURES</integer>
     <key>model</key><string>$AIRPLAY_INFO_MODEL</string>
     <key>protovers</key><string>1.0</string>
     <key>srcvers</key><string>$AIRPLAY_SOURCE_VERSION</string>
@@ -316,10 +319,10 @@ class AirPlayReceiver(
         setAttribute("deviceid", id)
         setAttribute("features", AIRPLAY_FEATURES_HEX)
         setAttribute("srcvers", AIRPLAY_SOURCE_VERSION)
-        setAttribute("flags", "0x44")
+        setAttribute("flags", AIRPLAY_FLAGS_HEX)
         setAttribute("vv", "2")
-        setAttribute("model", AIRPLAY_SERVICE_MODEL)
-        setAttribute("rhd", "5.6.0.0")
+        setAttribute("model", AIRPLAY_INFO_MODEL)
+        setAttribute("pi", uuid)
         setAttribute("pw", "false")
         setAttribute("pk", session.publicKeyHex)
       }, NsdManager.PROTOCOL_DNS_SD, airplay)
@@ -328,7 +331,7 @@ class AirPlayReceiver(
         serviceType = "_raop._tcp."
         this.port = port
         setAttribute("txtvers", "1")
-        setAttribute("am", AIRPLAY_SERVICE_MODEL)
+        setAttribute("am", AIRPLAY_INFO_MODEL)
         setAttribute("ch", "2")
         setAttribute("cn", "1,3")
         setAttribute("da", "true")
@@ -342,7 +345,7 @@ class AirPlayReceiver(
         setAttribute("sv", "false")
         setAttribute("sm", "false")
         setAttribute("tp", "UDP")
-        setAttribute("sf", "0x44")
+        setAttribute("sf", AIRPLAY_FLAGS_HEX)
         setAttribute("vs", AIRPLAY_SOURCE_VERSION)
         setAttribute("vn", "65537")
       }, NsdManager.PROTOCOL_DNS_SD, raop)
@@ -443,11 +446,13 @@ class AirPlayReceiver(
     const val TAG = "mang"
     const val BPLIST = "application/x-apple-binary-plist"
     const val XML_PLIST = "text/x-apple-plist+xml"
-    const val AIRPLAY_FEATURES_HEX = "0x5A7FFFF7,0x1E"
-    const val AIRPLAY_FEATURES = 130367356919L
+    const val AIRPLAY_PORT = 7000
+    const val AIRPLAY_FEATURES_HEX = "0x5A7FFEE6,0x400"
+    const val AIRPLAY_FEATURES = 4399564848870L
+    const val AIRPLAY_FLAGS = 4
+    const val AIRPLAY_FLAGS_HEX = "0x4"
     const val AIRPLAY_SOURCE_VERSION = "220.68"
     const val AIRPLAY_INFO_MODEL = "AppleTV3,2"
-    const val AIRPLAY_SERVICE_MODEL = "AppleTV3,2C"
     const val VIDEO_HEADER_BYTES = 128
     const val MAX_VIDEO_PAYLOAD_BYTES = 8 * 1024 * 1024
   }
