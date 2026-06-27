@@ -2,8 +2,6 @@ package notch.cat.cast.airplay
 
 import android.content.Context
 import android.net.Uri
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import android.util.Log
 import com.dd.plist.BinaryPropertyListParser
 import com.dd.plist.BinaryPropertyListWriter
@@ -11,9 +9,6 @@ import com.dd.plist.NSArray
 import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 import com.dd.plist.PropertyListParser
-import com.github.serezhka.airplay.lib.internal.FairPlay
-import com.github.serezhka.airplay.lib.internal.FairPlayVideoDecryptor
-import com.github.serezhka.airplay.lib.internal.Pairing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,14 +17,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.CastCommand
 import notch.cat.cast.R
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.net.DatagramSocket
 import java.net.ServerSocket
 import java.net.Socket
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.net.DatagramSocket
+
+private typealias RtspRequest = AirPlayRtsp.Request
+private typealias RtspResponse = AirPlayRtsp.Response
 
 class AirPlayReceiver(
   private val context: Context,
@@ -41,21 +34,20 @@ class AirPlayReceiver(
   private var videoServer: ServerSocket? = null
   private var audioDataSocket: DatagramSocket? = null
   private var audioControlSocket: DatagramSocket? = null
-  private var airplayRegistration: NsdManager.RegistrationListener? = null
-  private var raopRegistration: NsdManager.RegistrationListener? = null
+  private var discovery: AirPlayDiscovery? = null
   private val session = AirPlaySession()
 
   fun start(): Int {
     if (scope?.isActive == true) return server?.localPort ?: 0
-    val socket = runCatching { ServerSocket(AIRPLAY_PORT) }.getOrElse {
-      Log.w(TAG, "AirPlay port $AIRPLAY_PORT unavailable, using dynamic port", it)
+    val socket = runCatching { ServerSocket(AirPlayProfile.PORT) }.getOrElse {
+      Log.w(TAG, "AirPlay port ${AirPlayProfile.PORT} unavailable, using dynamic port", it)
       ServerSocket(0)
     }
     server = socket
     val activeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     scope = activeScope
     activeScope.launch { controlLoop(socket, activeScope) }
-    register(socket.localPort)
+    discovery = AirPlayDiscovery(context, uuid, session.publicKeyHex).also { it.register(socket.localPort) }
     return socket.localPort
   }
 
@@ -63,7 +55,8 @@ class AirPlayReceiver(
     val activeScope = scope ?: return
     scope = null
     activeScope.cancel()
-    unregister()
+    discovery?.unregister()
+    discovery = null
     runCatching { server?.close() }
     runCatching { videoServer?.close() }
     runCatching { audioDataSocket?.close() }
@@ -92,15 +85,17 @@ class AirPlayReceiver(
       val input = it.getInputStream()
       val output = it.getOutputStream()
       while (scope?.isActive == true) {
-        val request = runCatching { readRequest(input) }.getOrElse { error ->
+        val request = runCatching { AirPlayRtsp.read(input) }.getOrElse { error ->
           Log.e(TAG, "AirPlay request parse failed", error)
           return
         } ?: return
-        Log.i(TAG, "AirPlay ${request.method} ${request.path.substringBefore('?')} len=${request.body.size}")
+        val path = request.path.substringBefore("?")
+        Log.i(TAG, "AirPlay ${request.method} $path from=${socket.inetAddress.hostAddress}:${socket.port} len=${request.body.size}")
         val response = runCatching { route(request) }.getOrElse { error ->
           Log.e(TAG, "AirPlay handler failed", error)
           RtspResponse(500, "Internal Server Error", error.message.orEmpty().toByteArray(Charsets.UTF_8), "text/plain")
         }
+        Log.i(TAG, "AirPlay ${response.status} ${request.method} $path")
         output.write(response.bytes(request))
         output.flush()
         if (response.close) return
@@ -150,6 +145,7 @@ class AirPlayReceiver(
     }
 
     val stream = plist.stream() ?: return RtspResponse.empty(extra = mapOf("Session" to "1"))
+    Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
     return when (stream.type) {
       110 -> {
         session.streamConnectionId = java.lang.Long.toUnsignedString(stream.connectionId ?: 0L)
@@ -173,6 +169,7 @@ class AirPlayReceiver(
     videoServer?.let { return it.localPort }
     val socket = ServerSocket(0)
     videoServer = socket
+    Log.i(TAG, "AirPlay video listening on ${socket.localPort}")
     scope?.launch { videoLoop(socket) }
     return socket.localPort
   }
@@ -188,6 +185,7 @@ class AirPlayReceiver(
     socket.use {
       val input = it.getInputStream()
       val decryptor by lazy { session.videoDecryptor() }
+      var frames = 0
       while (scope?.isActive == true) {
         val header = input.readFully(VIDEO_HEADER_BYTES) ?: break
         val payloadSize = header.leInt(0)
@@ -201,10 +199,16 @@ class AirPlayReceiver(
         System.arraycopy(payload, 0, packetBytes, VIDEO_HEADER_BYTES, payloadSize)
         val packet = AirPlayVideoPacket.parse(packetBytes)
         when (packet.type) {
-          1 -> AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload))
+          1 -> {
+            Log.i(TAG, "AirPlay video config bytes=${packet.payload.size}")
+            AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload))
+          }
+
           0 -> {
             decryptor.decrypt(packet.payload)
             AirPlayH264.samplesToAnnexB(packet.payload)
+            frames += 1
+            if (frames == 1 || frames % 300 == 0) Log.i(TAG, "AirPlay video frame count=$frames bytes=${packet.payload.size}")
             AirPlayMirrorBus.frame(packet.payload)
           }
         }
@@ -263,24 +267,24 @@ class AirPlayReceiver(
       put("rotation", false)
       put("uuid", uuid)
     }))
-    put("features", AIRPLAY_FEATURES)
+    put("features", AirPlayProfile.FEATURES)
     put("keepAliveSendStatsAsBody", 1)
-    put("model", AIRPLAY_INFO_MODEL)
+    put("model", AirPlayProfile.MODEL)
     put("name", context.getString(R.string.application_name))
     put("pi", uuid)
     put("pk", NSData(session.publicKey))
-    put("sourceVersion", AIRPLAY_SOURCE_VERSION)
-    put("statusFlags", AIRPLAY_FLAGS)
+    put("sourceVersion", AirPlayProfile.SOURCE_VERSION)
+    put("statusFlags", AirPlayProfile.FLAGS)
     put("vv", 2)
   }
 
   private fun serverInfoPlist() = xmlPlist(
     """
-    <key>deviceid</key><string>${deviceId()}</string>
-    <key>features</key><integer>$AIRPLAY_FEATURES</integer>
-    <key>model</key><string>$AIRPLAY_INFO_MODEL</string>
+    <key>deviceid</key><string>${AirPlayDiscovery.deviceId(uuid)}</string>
+    <key>features</key><integer>${AirPlayProfile.FEATURES}</integer>
+    <key>model</key><string>${AirPlayProfile.MODEL}</string>
     <key>protovers</key><string>1.0</string>
-    <key>srcvers</key><string>$AIRPLAY_SOURCE_VERSION</string>
+    <key>srcvers</key><string>${AirPlayProfile.SOURCE_VERSION}</string>
     """.trimIndent()
   )
 
@@ -304,193 +308,17 @@ class AirPlayReceiver(
     }.toMap()
   }
 
-  private fun register(port: Int) {
-    val nsd = context.getSystemService(NsdManager::class.java) ?: return
-    val airplay = listener("AirPlay")
-    val raop = listener("RAOP")
-    airplayRegistration = airplay
-    raopRegistration = raop
-    val id = deviceId()
-    runCatching {
-      nsd.registerService(NsdServiceInfo().apply {
-        serviceName = context.getString(R.string.application_name)
-        serviceType = "_airplay._tcp."
-        this.port = port
-        setAttribute("deviceid", id)
-        setAttribute("features", AIRPLAY_FEATURES_HEX)
-        setAttribute("srcvers", AIRPLAY_SOURCE_VERSION)
-        setAttribute("flags", AIRPLAY_FLAGS_HEX)
-        setAttribute("vv", "2")
-        setAttribute("model", AIRPLAY_INFO_MODEL)
-        setAttribute("pi", uuid)
-        setAttribute("pw", "false")
-        setAttribute("pk", session.publicKeyHex)
-      }, NsdManager.PROTOCOL_DNS_SD, airplay)
-      nsd.registerService(NsdServiceInfo().apply {
-        serviceName = "${id.replace(":", "")}@${context.getString(R.string.application_name)}"
-        serviceType = "_raop._tcp."
-        this.port = port
-        setAttribute("txtvers", "1")
-        setAttribute("am", AIRPLAY_INFO_MODEL)
-        setAttribute("ch", "2")
-        setAttribute("cn", "1,3")
-        setAttribute("da", "true")
-        setAttribute("et", "0,3,5")
-        setAttribute("ek", "1")
-        setAttribute("ft", AIRPLAY_FEATURES_HEX)
-        setAttribute("md", "0,1,2")
-        setAttribute("pk", session.publicKeyHex)
-        setAttribute("sr", "44100")
-        setAttribute("ss", "16")
-        setAttribute("sv", "false")
-        setAttribute("sm", "false")
-        setAttribute("tp", "UDP")
-        setAttribute("sf", AIRPLAY_FLAGS_HEX)
-        setAttribute("vs", AIRPLAY_SOURCE_VERSION)
-        setAttribute("vn", "65537")
-      }, NsdManager.PROTOCOL_DNS_SD, raop)
-    }.onFailure { Log.e(TAG, "AirPlay registration failed", it) }
-  }
-
-  private fun unregister() {
-    val nsd = context.getSystemService(NsdManager::class.java) ?: return
-    listOfNotNull(airplayRegistration, raopRegistration).forEach { listener ->
-      runCatching { nsd.unregisterService(listener) }
-    }
-    airplayRegistration = null
-    raopRegistration = null
-  }
-
-  private fun listener(label: String) = object : NsdManager.RegistrationListener {
-    override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-      Log.i(TAG, "$label registered ${serviceInfo.serviceName}:${serviceInfo.port}")
-    }
-
-    override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-      Log.e(TAG, "$label registration failed: $errorCode")
-    }
-
-    override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) = Unit
-    override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
-  }
-
-  private fun deviceId() = uuid.replace("-", "").take(12).chunked(2).joinToString(":") { it.uppercase(Locale.US) }
-
   private fun plist(block: NSDictionary.() -> Unit): ByteArray = BinaryPropertyListWriter.writeToArray(NSDictionary().apply(block))
   private fun xmlPlist(body: String) =
     """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>$body</dict></plist>""".toByteArray(Charsets.UTF_8)
-
-  private class AirPlaySession {
-    private val pairing = Pairing()
-    private val fairPlay = FairPlay()
-    private var videoDecryptor: FairPlayVideoDecryptor? = null
-
-    val publicKey: ByteArray get() = pairing.publicKey()
-    val publicKeyHex: String get() = publicKey.joinToString("") { "%02x".format(it.toInt() and 0xff) }
-    var ekey: ByteArray? = null
-    var eiv: ByteArray? = null
-    var streamConnectionId: String? = null
-      set(value) {
-        field = value
-        videoDecryptor = null
-      }
-
-    fun pairSetup() = ByteArrayOutputStream().also { pairing.pairSetup(it) }.toByteArray()
-    fun pairVerify(body: ByteArray) = ByteArrayOutputStream().also { pairing.pairVerify(ByteArrayInputStream(body), it) }.toByteArray()
-    fun fairPlaySetup(body: ByteArray) = ByteArrayOutputStream().also { fairPlay.fairPlaySetup(ByteArrayInputStream(body), it) }.toByteArray()
-
-    fun videoDecryptor(): FairPlayVideoDecryptor {
-      val active = videoDecryptor
-      if (active != null) return active
-      val key = ekey ?: error("AirPlay ekey missing")
-      val secret = pairing.sharedSecret ?: error("AirPlay shared secret missing")
-      val connectionId = streamConnectionId ?: error("AirPlay streamConnectionID missing")
-      return FairPlayVideoDecryptor(fairPlay.decryptAesKey(key), secret, connectionId).also { videoDecryptor = it }
-    }
-  }
-
-  internal data class AirPlayStream(val type: Int, val connectionId: Long?)
-
-  internal data class RtspRequest(val method: String, val path: String, val protocol: String, val headers: Map<String, String>, val body: ByteArray)
-
-  private data class RtspResponse(
-    val status: Int,
-    val reason: String,
-    val body: ByteArray = ByteArray(0),
-    val contentType: String = "text/plain",
-    val extra: Map<String, String> = emptyMap(),
-    val close: Boolean = false
-  ) {
-    fun bytes(request: RtspRequest): ByteArray {
-      val protocol = if (request.protocol.startsWith("HTTP", ignoreCase = true)) "HTTP/1.1" else "RTSP/1.0"
-      val headers = buildList {
-        add("$protocol $status $reason")
-        request.headers["cseq"]?.let { add("CSeq: $it") }
-        add("Date: ${DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(java.time.ZoneOffset.UTC))}")
-        add("Server: AirTunes/$AIRPLAY_SOURCE_VERSION")
-        add("Audio-Jack-Status: connected; type=analog")
-        add("Content-Length: ${body.size}")
-        if (body.isNotEmpty()) add("Content-Type: $contentType")
-        extra.forEach { (key, value) -> add("$key: $value") }
-      }.joinToString("\r\n", postfix = "\r\n\r\n")
-      return headers.toByteArray(Charsets.ISO_8859_1) + body
-    }
-
-    companion object {
-      fun ok(body: ByteArray, contentType: String, extra: Map<String, String> = emptyMap()) = RtspResponse(200, "OK", body, contentType, extra)
-      fun empty(extra: Map<String, String> = emptyMap()) = RtspResponse(200, "OK", extra = extra)
-    }
-  }
 
   private companion object {
     const val TAG = "mang"
     const val BPLIST = "application/x-apple-binary-plist"
     const val XML_PLIST = "text/x-apple-plist+xml"
-    const val AIRPLAY_PORT = 7000
-    const val AIRPLAY_FEATURES_HEX = "0x5A7FFEE6,0x400"
-    const val AIRPLAY_FEATURES = 4399564848870L
-    const val AIRPLAY_FLAGS = 4
-    const val AIRPLAY_FLAGS_HEX = "0x4"
-    const val AIRPLAY_SOURCE_VERSION = "220.68"
-    const val AIRPLAY_INFO_MODEL = "AppleTV3,2"
     const val VIDEO_HEADER_BYTES = 128
     const val MAX_VIDEO_PAYLOAD_BYTES = 8 * 1024 * 1024
   }
-}
-
-private fun java.io.InputStream.readFully(size: Int): ByteArray? {
-  val bytes = ByteArray(size)
-  var offset = 0
-  while (offset < size) {
-    val read = read(bytes, offset, size - offset)
-    if (read < 0) return null
-    offset += read
-  }
-  return bytes
-}
-
-private fun readRequest(input: java.io.InputStream): AirPlayReceiver.RtspRequest? {
-  val header = ByteArrayOutputStream()
-  val last = ArrayDeque<Int>(4)
-  while (true) {
-    val b = input.read()
-    if (b < 0) return null
-    header.write(b)
-    if (last.size == 4) last.removeFirst()
-    last.addLast(b)
-    if (last.size == 4 && last.toList() == listOf('\r'.code, '\n'.code, '\r'.code, '\n'.code)) break
-    require(header.size() <= 65536) { "AirPlay header too large" }
-  }
-  val lines = header.toString(Charsets.ISO_8859_1.name()).split("\r\n").filter { it.isNotEmpty() }
-  val requestLine = lines.firstOrNull() ?: return null
-  val parts = requestLine.split(" ", limit = 3)
-  if (parts.size < 2) return null
-  val headers = lines.drop(1).mapNotNull { line ->
-    val index = line.indexOf(':')
-    if (index <= 0) null else line.take(index).trim().lowercase(Locale.US) to line.substring(index + 1).trim()
-  }.toMap()
-  val length = headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-  return AirPlayReceiver.RtspRequest(parts[0].uppercase(Locale.US), parts[1], parts.getOrElse(2) { "RTSP/1.0" }, headers, input.readFully(length) ?: return null)
 }
 
 private fun ByteArray.leInt(offset: Int) = (this[offset].toInt() and 0xff) or ((this[offset + 1].toInt() and 0xff) shl 8) or ((this[offset + 2].toInt() and 0xff) shl 16) or ((this[offset + 3].toInt() and 0xff) shl 24)
@@ -499,10 +327,10 @@ private fun ByteArray.dictionary() = BinaryPropertyListParser.parse(this) as NSD
 
 private fun NSDictionary.bytes(key: String): ByteArray? = objectForKey(key)?.toJavaObject() as? ByteArray
 
-private fun NSDictionary.stream(): AirPlayReceiver.AirPlayStream? {
+private fun NSDictionary.stream(): AirPlayStream? {
   val streams = objectForKey("streams")?.toJavaObject() as? Array<*> ?: return null
   val stream = streams.firstOrNull() as? Map<*, *> ?: return null
   val type = (stream["type"] as? Number)?.toInt() ?: return null
   val connectionId = (stream["streamConnectionID"] as? Number)?.toLong()
-  return AirPlayReceiver.AirPlayStream(type, connectionId)
+  return AirPlayStream(type, connectionId)
 }
