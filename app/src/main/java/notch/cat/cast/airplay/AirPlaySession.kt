@@ -6,8 +6,8 @@ import com.github.serezhka.airplay.lib.internal.Pairing
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
-internal class AirPlaySession {
-  private val pairing = Pairing()
+internal class AirPlaySession(publicKeySeed: ByteArray? = null) {
+  private val pairing = publicKeySeed?.let(::Pairing) ?: Pairing()
   private val fairPlay = FairPlay()
   private var videoDecryptor: FairPlayVideoDecryptor? = null
 

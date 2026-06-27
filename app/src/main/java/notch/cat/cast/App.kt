@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.databinding.ActivityMainBinding
+import notch.cat.cast.airplay.AirPlayKey
 import notch.cat.cast.airplay.AirPlayMirrorBus
 import notch.cat.cast.airplay.AirPlayMirrorDecoder
 import notch.cat.cast.airplay.AirPlayReceiver
@@ -189,7 +190,7 @@ class CastService : Service() {
     val dmr = Dmr(applicationContext) { CastSession.send(this, it) }
     val info = dmr.start()
     server = dmr
-    airplay = AirPlayReceiver(applicationContext, info.uuid) { CastSession.send(this, it) }.also { it.start() }
+    airplay = AirPlayReceiver(applicationContext, info.uuid, AirPlayKey.seed(info.uuid)) { CastSession.send(this, it) }.also { it.start() }
     StateStore.setServerState(
       running = true, uuid = info.uuid, ipAddress = info.ipAddress, httpPort = info.httpPort, wifiName = ssid(applicationContext), multicastLocked = multicastLock?.isHeld == true
     )

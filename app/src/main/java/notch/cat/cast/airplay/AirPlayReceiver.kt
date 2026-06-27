@@ -24,6 +24,7 @@ private typealias RtspResponse = AirPlayRtsp.Response
 class AirPlayReceiver(
   private val context: Context,
   private val uuid: String,
+  publicKeySeed: ByteArray,
   private val send: (CastCommand) -> Unit
 ) {
   private var scope: CoroutineScope? = null
@@ -33,7 +34,7 @@ class AirPlayReceiver(
   private var audioControlSocket: DatagramSocket? = null
   private var discovery: AirPlayDiscovery? = null
   private var timing: AirPlayTiming? = null
-  private val session = AirPlaySession()
+  private val session = AirPlaySession(publicKeySeed)
 
   fun start(): Int {
     if (scope?.isActive == true) return server?.localPort ?: 0

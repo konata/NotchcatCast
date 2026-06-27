@@ -1,9 +1,11 @@
 package com.github.serezhka.airplay.lib.internal;
 
 import net.i2p.crypto.eddsa.EdDSAEngine;
+import net.i2p.crypto.eddsa.EdDSAPrivateKey;
 import net.i2p.crypto.eddsa.EdDSAPublicKey;
 import net.i2p.crypto.eddsa.KeyPairGenerator;
 import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
+import net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec;
 import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 import org.whispersystems.curve25519.Curve25519;
 import org.whispersystems.curve25519.Curve25519KeyPair;
@@ -34,6 +36,16 @@ public class Pairing {
 
     public Pairing() {
         this.keyPair = new KeyPairGenerator().generateKeyPair();
+    }
+
+    public Pairing(byte[] seed) {
+        if (seed.length != 32) {
+            throw new IllegalArgumentException("Ed25519 seed must be 32 bytes");
+        }
+        EdDSAPrivateKeySpec privateSpec = new EdDSAPrivateKeySpec(seed.clone(), EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519));
+        EdDSAPrivateKey privateKey = new EdDSAPrivateKey(privateSpec);
+        EdDSAPublicKey publicKey = new EdDSAPublicKey(new EdDSAPublicKeySpec(privateKey.getA(), privateSpec.getParams()));
+        this.keyPair = new KeyPair(publicKey, privateKey);
     }
 
     public void pairSetup(OutputStream out) throws IOException {
