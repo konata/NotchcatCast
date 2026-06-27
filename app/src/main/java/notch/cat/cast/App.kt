@@ -2,6 +2,7 @@
 
 package notch.cat.cast
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,6 +12,7 @@ import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -27,6 +29,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.edit
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
@@ -69,10 +72,29 @@ import java.util.Locale
 import java.util.UUID
 
 private const val TAG = "mang"
+private const val OPEN_PLAYER_CHANNEL_ID = "notch_cat_cast_open_player"
+private const val OPEN_PLAYER_NOTIFICATION_ID = 1002
 
 private fun Context.playerIntent() = Intent(this, IndexActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 private fun Context.startCastService() = runCatching { startForegroundService(Intent(this, CastService::class.java)) }.onFailure { Log.e(TAG, "start cast service failed", it) }
-private fun Context.openPlayerPage() = runCatching { startActivity(playerIntent()) }.onFailure { Log.e(TAG, "open player page failed", it) }
+private fun Context.hasWifiNamePermission() = checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+private fun Context.hasCastNotificationPermission() = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+private fun Context.hasOverlayPermission() = Settings.canDrawOverlays(this)
+private fun Context.hasCastSetupPermissions() = hasWifiNamePermission() && hasCastNotificationPermission() && hasOverlayPermission()
+private fun Context.openPlayerPage() = if (hasOverlayPermission()) runCatching { startActivity(playerIntent()) }.onFailure { Log.e(TAG, "open player page failed", it) } else notifyOpenPlayer()
+private fun Context.notifyOpenPlayer() {
+  if (!hasCastNotificationPermission()) {
+    Log.w(TAG, "cannot notify player open: missing POST_NOTIFICATIONS")
+    return
+  }
+  val manager = getSystemService(NotificationManager::class.java) ?: return
+  manager.createNotificationChannel(NotificationChannel(OPEN_PLAYER_CHANNEL_ID, getString(R.string.notification_open_channel), NotificationManager.IMPORTANCE_DEFAULT))
+  val intent = PendingIntent.getActivity(this, 0, playerIntent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  val notification = Notification.Builder(this, OPEN_PLAYER_CHANNEL_ID).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.notification_open_title))
+    .setContentText(getString(R.string.notification_open_text)).setContentIntent(intent).setAutoCancel(true).setCategory(Notification.CATEGORY_STATUS).build()
+  manager.notify(OPEN_PLAYER_NOTIFICATION_ID, notification)
+}
+private fun Context.cancelOpenPlayerNotification() = getSystemService(NotificationManager::class.java)?.cancel(OPEN_PLAYER_NOTIFICATION_ID)
 private val START_ACTIONS = setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_USER_UNLOCKED, Intent.ACTION_MY_PACKAGE_REPLACED)
 
 class StartReceiver : BroadcastReceiver() {
@@ -187,6 +209,13 @@ class IndexActivity : ComponentActivity() {
   private var audioFallbackUsed = false
   private var lastVolume = StateStore.state.value.volume
   private var lastMuted = StateStore.state.value.muted
+  private var permissionFlow = false
+  private var askedWifiPermission = false
+  private var askedNotificationPermission = false
+  private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+    StateStore.setWifiName(ssid(applicationContext))
+    if (permissionFlow) advancePermissionFlow() else renderPermissionButton()
+  }
   private val surface: (CastCommand) -> Unit = { command ->
     when (command) {
       is CastCommand.Load -> load(command.uri, command.play)
@@ -215,6 +244,7 @@ class IndexActivity : ComponentActivity() {
     binding = ActivityMainBinding.inflate(layoutInflater)
     setContentView(binding.root)
     binding.playerView.player = player
+    binding.permissionButton.setOnClickListener { beginPermissionFlow() }
 
     player.addListener(object : Player.Listener {
       override fun onPlaybackStateChanged(playbackState: Int) {
@@ -283,8 +313,15 @@ class IndexActivity : ComponentActivity() {
 
   override fun onStart() {
     super.onStart()
+    applicationContext.cancelOpenPlayerNotification()
     playerScope = CoroutineScope(lifecycleScope.coroutineContext + SupervisorJob(lifecycleScope.coroutineContext[Job]))
     CastSession.attach(surface)
+  }
+
+  override fun onResume() {
+    super.onResume()
+    StateStore.setWifiName(ssid(applicationContext))
+    renderPermissionButton()
   }
 
   override fun onStop() {
@@ -373,6 +410,46 @@ class IndexActivity : ComponentActivity() {
     binding.statusMulticastValue.text = getString(if (snapshot.multicastLocked) R.string.status_locked else R.string.status_unlocked)
     binding.statusError.isVisible = snapshot.lastError.isNotBlank()
     binding.statusError.text = snapshot.lastError
+    renderPermissionButton()
+  }
+
+  private fun beginPermissionFlow() {
+    permissionFlow = true
+    askedWifiPermission = false
+    askedNotificationPermission = false
+    advancePermissionFlow()
+  }
+
+  private fun advancePermissionFlow() {
+    renderPermissionButton()
+    when {
+      !hasWifiNamePermission() && !askedWifiPermission -> {
+        askedWifiPermission = true
+        permissionLauncher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
+      }
+
+      !hasCastNotificationPermission() && !askedNotificationPermission -> {
+        askedNotificationPermission = true
+        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      }
+
+      !hasOverlayPermission() -> {
+        permissionFlow = false
+        runCatching {
+          startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }.onFailure { Log.e(TAG, "open overlay permission settings failed", it) }
+      }
+
+      else -> {
+        permissionFlow = false
+        StateStore.setWifiName(ssid(applicationContext))
+        renderPermissionButton()
+      }
+    }
+  }
+
+  private fun renderPermissionButton() {
+    binding.permissionButton.isVisible = !hasCastSetupPermissions()
   }
 
   private fun clearPlayback(clearError: Boolean = true) {
@@ -536,6 +613,7 @@ private object StateStore {
 
   fun setPlayerPosition(positionMs: Long, durationMs: Long) = state.update { it.copy(positionMs = positionMs.coerceAtLeast(0L), durationMs = durationMs.coerceAtLeast(0L)) }
   fun setTransport(transportState: TransportState) = state.update { it.copy(transportState = if (it.currentUri.isBlank()) TransportState.NoMedia else transportState, lastError = "") }
+  fun setWifiName(wifiName: String) = state.update { it.copy(wifiName = wifiName) }
   fun clearMedia(clearError: Boolean = true) = state.update {
     it.copy(currentUri = "", transportState = TransportState.NoMedia, positionMs = 0L, durationMs = 0L, lastError = if (clearError) "" else it.lastError)
   }
