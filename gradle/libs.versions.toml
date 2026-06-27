@@ -6,7 +6,6 @@ activity = "1.8.0"
 coroutineCore = "1.5.0"
 media3 = "1.10.1"
 ddPlist = "1.29"
-junit = "4.13.2"
 eddsa = "0.3.0"
 curve25519 = "0.5.0"
 
@@ -20,7 +19,6 @@ androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplaye
 androidx-media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 dd-plist = { group = "com.googlecode.plist", name = "dd-plist", version.ref = "ddPlist" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
 eddsa = { group = "net.i2p.crypto", name = "eddsa", version.ref = "eddsa" }
 curve25519 = { group = "org.whispersystems", name = "curve25519-java", version.ref = "curve25519" }
 

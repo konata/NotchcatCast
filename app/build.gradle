@@ -42,8 +42,8 @@ dependencies {
     implementation libs.androidx.media3.exoplayer
     implementation libs.androidx.media3.exoplayer.hls
     implementation libs.androidx.media3.ui
+    implementation name: 'java-airplay-lib-v1.0.7-local', ext: 'jar'
     implementation libs.dd.plist
     implementation libs.eddsa
     implementation libs.curve25519
-    testImplementation libs.junit
 }

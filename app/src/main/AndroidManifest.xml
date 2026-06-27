@@ -27,7 +27,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".IndexActivity"
+            android:name=".PlayerActivity"
             android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>
@@ -38,12 +38,12 @@
         </activity>
 
         <service
-            android:name=".CastService"
+            android:name=".ReceiverService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
         <receiver
-            android:name=".StartReceiver"
+            android:name=".AutoStartReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
