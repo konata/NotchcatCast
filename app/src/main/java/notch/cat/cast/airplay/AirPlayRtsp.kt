@@ -47,10 +47,14 @@ internal object AirPlayRtsp {
       header.write(b)
       if (last.size == 4) last.removeFirst()
       last.addLast(b)
-      if (last.size == 4 && last.toList() == listOf('\r'.code, '\n'.code, '\r'.code, '\n'.code)) break
+      val bytes = last.toList()
+      if (
+        bytes.takeLast(2) == listOf('\n'.code, '\n'.code) ||
+        bytes == listOf('\r'.code, '\n'.code, '\r'.code, '\n'.code)
+      ) break
       require(header.size() <= 65536) { "AirPlay header too large" }
     }
-    val lines = header.toString(Charsets.ISO_8859_1.name()).split("\r\n").filter { it.isNotEmpty() }
+    val lines = header.toString(Charsets.ISO_8859_1.name()).trimEnd('\r', '\n').split(Regex("\r?\n")).filter { it.isNotEmpty() }
     val requestLine = lines.firstOrNull() ?: return null
     val parts = requestLine.split(" ", limit = 3)
     if (parts.size < 2) return null

@@ -21,6 +21,27 @@ class AirPlayRtspTest {
   }
 
   @Test
+  fun readRequestAcceptsLfOnlyHeadersSeenInAirPlayCaptures() {
+    val body = "volume: -20.000000\n".toByteArray()
+    val raw = (
+      "SET_PARAMETER rtsp://example.local/stream RTSP/1.0\n" +
+        "Content-Length: ${body.size}\n" +
+        "Content-Type: text/parameters\n" +
+        "CSeq: 9\n" +
+        "\n"
+      ).toByteArray() + body
+
+    val request = AirPlayRtsp.read(ByteArrayInputStream(raw))
+
+    assertEquals("SET_PARAMETER", request?.method)
+    assertEquals("rtsp://example.local/stream", request?.path)
+    assertEquals("RTSP/1.0", request?.protocol)
+    assertEquals("9", request?.headers?.get("cseq"))
+    assertEquals("text/parameters", request?.headers?.get("content-type"))
+    assertArrayEquals(body, request!!.body)
+  }
+
+  @Test
   fun responseMirrorsRequestProtocolAndCSeq() {
     val request = AirPlayRtsp.Request("OPTIONS", "*", "RTSP/1.0", mapOf("cseq" to "3"), ByteArray(0))
 
