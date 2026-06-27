@@ -1,11 +1,31 @@
 package notch.cat.cast.airplay
 
+import com.dd.plist.BinaryPropertyListParser
 import com.dd.plist.BinaryPropertyListWriter
 import com.dd.plist.NSArray
 import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 
 internal object AirPlayInfo {
+  fun response(
+    headers: Map<String, String>,
+    body: ByteArray,
+    name: String,
+    uuid: String,
+    deviceId: String,
+    publicKey: ByteArray,
+    publicKeyHex: String
+  ): ByteArray {
+    if (headers["content-type"]?.contains(BPLIST, ignoreCase = true) == true) {
+      val qualifiers = qualifiers(body)
+      return BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
+        if ("txtAirPlay" in qualifiers) put("txtAirPlay", NSData(AirPlayTxt.bytes(AirPlayTxt.airplay(deviceId, uuid, publicKeyHex))))
+        if ("txtRAOP" in qualifiers) put("txtRAOP", NSData(AirPlayTxt.bytes(AirPlayTxt.raop(publicKeyHex))))
+      })
+    }
+    return plist(name, uuid, deviceId, publicKey)
+  }
+
   fun plist(name: String, uuid: String, deviceId: String, publicKey: ByteArray) =
     BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
       put("audioFormats", NSArray(
@@ -43,4 +63,12 @@ internal object AirPlayInfo {
       put("statusFlags", 68)
       put("vv", 2)
     })
+
+  private fun qualifiers(body: ByteArray) = runCatching {
+    val dict = BinaryPropertyListParser.parse(body) as? NSDictionary ?: return@runCatching emptySet()
+    val array = dict.objectForKey("qualifier") as? NSArray ?: return@runCatching emptySet()
+    array.array.map { it.toJavaObject().toString() }.toSet()
+  }.getOrDefault(emptySet())
+
+  private const val BPLIST = "application/x-apple-binary-plist"
 }

@@ -38,13 +38,13 @@ internal class AirPlayDiscovery(
         serviceName = name
         serviceType = "_airplay._tcp."
         this.port = port
-        airplayTxt(id, uuid, publicKeyHex).forEach { (key, value) -> setAttribute(key, value) }
+        AirPlayTxt.airplay(id, uuid, publicKeyHex).forEach { (key, value) -> setAttribute(key, value) }
       }, NsdManager.PROTOCOL_DNS_SD, airplay)
       nsd.registerService(NsdServiceInfo().apply {
         serviceName = "${id.replace(":", "")}@$name"
         serviceType = "_raop._tcp."
         this.port = port
-        raopTxt(publicKeyHex).forEach { (key, value) -> setAttribute(key, value) }
+        AirPlayTxt.raop(publicKeyHex).forEach { (key, value) -> setAttribute(key, value) }
       }, NsdManager.PROTOCOL_DNS_SD, raop)
     }.onFailure { Log.e(TAG, "AirPlay registration failed", it) }
   }
@@ -73,39 +73,6 @@ internal class AirPlayDiscovery(
 
   companion object {
     fun deviceId(uuid: String) = uuid.replace("-", "").take(12).chunked(2).joinToString(":") { it.uppercase(Locale.US) }
-
-    fun airplayTxt(deviceId: String, pi: String, pk: String) = linkedMapOf(
-      "deviceid" to deviceId,
-      "features" to AirPlayProfile.FEATURES_HEX,
-      "srcvers" to AirPlayProfile.SOURCE_VERSION,
-      "flags" to AirPlayProfile.FLAGS_HEX,
-      "vv" to "2",
-      "model" to AirPlayProfile.MODEL,
-      "pi" to pi,
-      "pw" to "false",
-      "pk" to pk,
-    )
-
-    fun raopTxt(pk: String) = linkedMapOf(
-      "txtvers" to "1",
-      "am" to AirPlayProfile.MODEL,
-      "ch" to "2",
-      "cn" to "1,3",
-      "da" to "true",
-      "et" to "0,3,5",
-      "ek" to "1",
-      "ft" to AirPlayProfile.FEATURES_HEX,
-      "md" to "0,1,2",
-      "pk" to pk,
-      "sr" to "44100",
-      "ss" to "16",
-      "sv" to "false",
-      "sm" to "false",
-      "tp" to "UDP",
-      "sf" to AirPlayProfile.FLAGS_HEX,
-      "vs" to AirPlayProfile.SOURCE_VERSION,
-      "vn" to "65537",
-    )
   }
 }
 

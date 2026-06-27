@@ -108,11 +108,14 @@ class AirPlayReceiver(
     val path = request.path.substringBefore("?")
     val isGet = request.method == "GET" || request.method == "HEAD"
     return when {
-      isGet && path == "/info" -> RtspResponse.ok(AirPlayInfo.plist(
+      isGet && path == "/info" -> RtspResponse.ok(AirPlayInfo.response(
+        headers = request.headers,
+        body = request.body,
         name = context.getString(R.string.application_name),
         uuid = uuid,
         deviceId = AirPlayDiscovery.deviceId(uuid),
-        publicKey = session.publicKey
+        publicKey = session.publicKey,
+        publicKeyHex = session.publicKeyHex
       ), BPLIST)
       isGet && path == "/server-info" -> RtspResponse.ok(AirPlayServerInfo.xml(AirPlayDiscovery.deviceId(uuid)), XML_PLIST)
       isGet && path == "/playback-info" -> RtspResponse.ok(playbackInfoPlist(), XML_PLIST)
