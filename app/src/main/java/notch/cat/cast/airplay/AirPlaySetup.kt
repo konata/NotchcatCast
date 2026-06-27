@@ -13,7 +13,7 @@ internal sealed interface AirPlaySetup {
     val timingPort: Int?
   ) : AirPlaySetup
 
-  data class Stream(val stream: AirPlayStream) : AirPlaySetup
+  data class Streams(val streams: List<AirPlayStream>) : AirPlaySetup
   data object Empty : AirPlaySetup
 
   companion object {
@@ -28,7 +28,7 @@ internal sealed interface AirPlaySetup {
           timingPort = dict.int("timingPort")
         )
       }
-      return dict.stream()?.let(::Stream) ?: Empty
+      return dict.streams()?.let(::Streams) ?: Empty
     }
 
     fun responseSession(eventPort: Int, timingPort: Int) = plist {
@@ -36,19 +36,14 @@ internal sealed interface AirPlaySetup {
       put("timingPort", timingPort)
     }
 
-    fun responseVideo(dataPort: Int) = plist {
-      put("streams", NSArray(NSDictionary().apply {
-        put("type", 110)
-        put("dataPort", dataPort)
-      }))
-    }
-
-    fun responseAudio(type: Int, dataPort: Int, controlPort: Int) = plist {
-      put("streams", NSArray(NSDictionary().apply {
-        put("type", type)
-        put("dataPort", dataPort)
-        put("controlPort", controlPort)
-      }))
+    fun responseStreams(streams: List<AirPlayStreamPort>) = plist {
+      put("streams", NSArray(*streams.map { stream ->
+        NSDictionary().apply {
+          put("type", stream.type)
+          put("dataPort", stream.dataPort)
+          stream.controlPort?.let { put("controlPort", it) }
+        }
+      }.toTypedArray()))
     }
 
     private fun plist(block: NSDictionary.() -> Unit): ByteArray =
@@ -58,20 +53,24 @@ internal sealed interface AirPlaySetup {
 
 internal data class AirPlayStream(val type: Int, val connectionId: String?)
 
+internal data class AirPlayStreamPort(val type: Int, val dataPort: Int, val controlPort: Int? = null)
+
 private fun NSDictionary.bytes(key: String): ByteArray? = objectForKey(key)?.toJavaObject() as? ByteArray
 
 private fun NSDictionary.string(key: String): String? = objectForKey(key)?.toJavaObject()?.toString()
 
 private fun NSDictionary.int(key: String): Int? = (objectForKey(key)?.toJavaObject() as? Number)?.toInt()
 
-private fun NSDictionary.stream(): AirPlayStream? {
+private fun NSDictionary.streams(): List<AirPlayStream>? {
   val streams = objectForKey("streams")?.toJavaObject() as? Array<*> ?: return null
-  val stream = streams.firstOrNull() as? Map<*, *> ?: return null
-  val type = (stream["type"] as? Number)?.toInt() ?: return null
-  val connectionId = when (val value = stream["streamConnectionID"]) {
-    is Number -> java.lang.Long.toUnsignedString(value.toLong())
-    is String -> value
-    else -> null
-  }
-  return AirPlayStream(type, connectionId)
+  return streams.mapNotNull { item ->
+    val stream = item as? Map<*, *> ?: return@mapNotNull null
+    val type = (stream["type"] as? Number)?.toInt() ?: return@mapNotNull null
+    val connectionId = when (val value = stream["streamConnectionID"]) {
+      is Number -> java.lang.Long.toUnsignedString(value.toLong())
+      is String -> value
+      else -> null
+    }
+    AirPlayStream(type, connectionId)
+  }.takeIf { it.isNotEmpty() }
 }

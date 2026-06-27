@@ -155,20 +155,23 @@ class AirPlayReceiver(
       RtspResponse.ok(AirPlaySetup.responseSession(eventPort = 0, timingPort = timingPort), BPLIST, extra = mapOf("Session" to "1"))
     }
 
-    is AirPlaySetup.Stream -> {
-      val stream = setup.stream
-      Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
-      when (stream.type) {
-        110 -> {
-          session.streamConnectionId = stream.connectionId
-          AirPlayMirrorBus.start()
-          send(CastCommand.StartMirror)
-          RtspResponse.ok(AirPlaySetup.responseVideo(startVideoServer()), BPLIST, extra = mapOf("Session" to "1"))
-        }
+    is AirPlaySetup.Streams -> {
+      val ports = setup.streams.mapNotNull { stream ->
+        Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
+        when (stream.type) {
+          110 -> {
+            session.streamConnectionId = stream.connectionId
+            AirPlayMirrorBus.start()
+            send(CastCommand.StartMirror)
+            AirPlayStreamPort(type = 110, dataPort = startVideoServer())
+          }
 
-        96, 100, 101 -> RtspResponse.ok(audioSetupPlist(stream.type), BPLIST, extra = mapOf("Session" to "1"))
-        else -> RtspResponse.empty(extra = mapOf("Session" to "1"))
+          96, 100, 101 -> audioSetupPort(stream.type)
+          else -> null
+        }
       }
+      if (ports.isEmpty()) RtspResponse.empty(extra = mapOf("Session" to "1"))
+      else RtspResponse.ok(AirPlaySetup.responseStreams(ports), BPLIST, extra = mapOf("Session" to "1"))
     }
 
     AirPlaySetup.Empty -> RtspResponse.empty(extra = mapOf("Session" to "1"))
@@ -233,10 +236,10 @@ class AirPlayReceiver(
     send(CastCommand.StopMirror)
   }
 
-  private fun audioSetupPlist(type: Int): ByteArray {
+  private fun audioSetupPort(type: Int): AirPlayStreamPort {
     val data = audioDataSocket ?: DatagramSocket(0).also { audioDataSocket = it }
     val control = audioControlSocket ?: DatagramSocket(0).also { audioControlSocket = it }
-    return AirPlaySetup.responseAudio(type, data.localPort, control.localPort)
+    return AirPlayStreamPort(type, data.localPort, control.localPort)
   }
 
   private fun playbackInfoPlist() = xmlPlist(

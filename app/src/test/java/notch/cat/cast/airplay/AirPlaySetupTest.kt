@@ -39,22 +39,60 @@ class AirPlaySetupTest {
       }))
     })
 
-    val setup = AirPlaySetup.parse(body) as AirPlaySetup.Stream
+    val setup = AirPlaySetup.parse(body) as AirPlaySetup.Streams
 
-    assertEquals(110, setup.stream.type)
-    assertEquals("18446744073709551615", setup.stream.connectionId)
+    assertEquals(1, setup.streams.size)
+    assertEquals(110, setup.streams[0].type)
+    assertEquals("18446744073709551615", setup.streams[0].connectionId)
+  }
+
+  @Test
+  fun parserKeepsEveryRequestedStream() {
+    val body = BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
+      put("streams", NSArray(
+        NSDictionary().apply {
+          put("type", 110)
+          put("streamConnectionID", 7L)
+        },
+        NSDictionary().apply {
+          put("type", 96)
+          put("controlPort", 62989)
+        }
+      ))
+    })
+
+    val setup = AirPlaySetup.parse(body) as AirPlaySetup.Streams
+
+    assertEquals(listOf(110, 96), setup.streams.map { it.type })
+    assertEquals("7", setup.streams[0].connectionId)
   }
 
   @Test
   fun setupResponsesMatchAirPlayMirrorShape() {
     val session = AirPlaySetup.responseSession(eventPort = 0, timingPort = 43210).dict()
-    val video = AirPlaySetup.responseVideo(dataPort = 41000).dict()
+    val video = AirPlaySetup.responseStreams(listOf(AirPlayStreamPort(type = 110, dataPort = 41000))).dict()
 
     assertEquals(0, session.int("eventPort"))
     assertEquals(43210, session.int("timingPort"))
     assertTrue(video.containsKey("streams"))
     assertFalse(video.containsKey("eventPort"))
     assertFalse(video.containsKey("timingPort"))
+  }
+
+  @Test
+  fun streamResponseIncludesEveryStartedStream() {
+    val response = AirPlaySetup.responseStreams(listOf(
+      AirPlayStreamPort(type = 110, dataPort = 41000),
+      AirPlayStreamPort(type = 96, dataPort = 42000, controlPort = 42001)
+    )).dict()
+    val streams = response.objectForKey("streams").toJavaObject() as Array<*>
+
+    assertEquals(2, streams.size)
+    assertEquals(110, (streams[0] as Map<*, *>)["type"])
+    assertEquals(41000, (streams[0] as Map<*, *>)["dataPort"])
+    assertEquals(96, (streams[1] as Map<*, *>)["type"])
+    assertEquals(42000, (streams[1] as Map<*, *>)["dataPort"])
+    assertEquals(42001, (streams[1] as Map<*, *>)["controlPort"])
   }
 
   private fun ByteArray.dict() = BinaryPropertyListParser.parse(this) as NSDictionary
