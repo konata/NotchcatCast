@@ -112,7 +112,7 @@ class AirPlayReceiver(
     val isGet = request.method == "GET" || request.method == "HEAD"
     return when {
       isGet && path == "/info" -> RtspResponse.ok(infoPlist(), BPLIST)
-      isGet && path == "/server-info" -> RtspResponse.ok(serverInfoPlist(), XML_PLIST)
+      isGet && path == "/server-info" -> RtspResponse.ok(AirPlayServerInfo.xml(AirPlayDiscovery.deviceId(uuid)), XML_PLIST)
       isGet && path == "/playback-info" -> RtspResponse.ok(playbackInfoPlist(), XML_PLIST)
       isGet && path == "/scrub" -> RtspResponse.ok("duration: 0.0\nposition: 0.0\n".toByteArray(), "text/parameters")
       request.method == "POST" && path == "/play" -> airplayUrlPlay(request)
@@ -267,16 +267,6 @@ class AirPlayReceiver(
     put("statusFlags", AirPlayProfile.FLAGS)
     put("vv", 2)
   }
-
-  private fun serverInfoPlist() = xmlPlist(
-    """
-    <key>deviceid</key><string>${AirPlayDiscovery.deviceId(uuid)}</string>
-    <key>features</key><integer>${AirPlayProfile.FEATURES}</integer>
-    <key>model</key><string>${AirPlayProfile.MODEL}</string>
-    <key>protovers</key><string>1.0</string>
-    <key>srcvers</key><string>${AirPlayProfile.SOURCE_VERSION}</string>
-    """.trimIndent()
-  )
 
   private fun playbackInfoPlist() = xmlPlist(
     """
