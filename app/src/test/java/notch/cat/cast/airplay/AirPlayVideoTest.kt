@@ -72,6 +72,21 @@ class AirPlayVideoTest {
   }
 
   @Test
+  fun codecConfigDetectsHevcPayloadAndExtractsVpsSpsPpsAsSingleCsd() {
+    val vps = byteArrayOf(0x40, 1, 2)
+    val sps = byteArrayOf(0x42, 3, 4)
+    val pps = byteArrayOf(0x44, 5, 6)
+    val packet = videoPacket(type = 1, option = 0x011e, width = 1920f, height = 1080f, payload = hevcConfigPayload(vps, sps, pps))
+
+    val config = AirPlayCodecConfig.parse(packet.payload, packet.format) as AirPlayHevcConfig
+
+    assertEquals("video/hevc", config.mimeType)
+    assertEquals(1920, config.width)
+    assertEquals(1080, config.height)
+    assertArrayEquals(byteArrayOf(0, 0, 0, 1, *vps, 0, 0, 0, 1, *sps, 0, 0, 0, 1, *pps), config.csd.single())
+  }
+
+  @Test
   fun samplesReplaceLengthPrefixesWithAnnexBStartCodes() {
     val first = byteArrayOf(0x65, 1, 2)
     val second = byteArrayOf(0x41, 3)
@@ -116,4 +131,15 @@ class AirPlayVideoTest {
     0, pps.size.toByte(),
     *pps
   )
+
+  private fun hevcConfigPayload(vps: ByteArray, sps: ByteArray, pps: ByteArray): ByteArray {
+    val payload = ByteArray(0x75)
+    payload[4] = 'h'.code.toByte()
+    payload[5] = 'v'.code.toByte()
+    payload[6] = 'c'.code.toByte()
+    payload[7] = '1'.code.toByte()
+    return payload + hevcArray(0xa0.toByte(), vps) + hevcArray(0xa1.toByte(), sps) + hevcArray(0xa2.toByte(), pps)
+  }
+
+  private fun hevcArray(type: Byte, bytes: ByteArray) = byteArrayOf(type, 0, 1, (bytes.size ushr 8).toByte(), bytes.size.toByte(), *bytes)
 }

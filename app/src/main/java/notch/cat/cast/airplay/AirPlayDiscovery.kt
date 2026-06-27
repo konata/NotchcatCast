@@ -9,8 +9,8 @@ import java.util.Locale
 
 internal object AirPlayProfile {
   const val PORT = 7000
-  const val FEATURES_HEX = "0x5A7FFEE6,0x0"
-  const val FEATURES = 1518337766L
+  const val FEATURES_HEX = "0x5A7FFEE6,0x400"
+  const val FEATURES = 4399564848870L
   const val FLAGS = 4
   const val FLAGS_HEX = "0x4"
   const val SOURCE_VERSION = "220.68"

@@ -9,6 +9,40 @@ enum class AirPlayVideoPayload { FRAME, CODEC_CONFIG, EMPTY_CONFIG, KEEP_ALIVE, 
 
 data class AirPlayVideoFormat(val sourceWidth: Int, val sourceHeight: Int, val width: Int, val height: Int)
 
+sealed interface AirPlayCodecConfig {
+  val mimeType: String
+  val width: Int
+  val height: Int
+  val csd: List<ByteArray>
+
+  companion object {
+    fun parse(payload: ByteArray, format: AirPlayVideoFormat? = null): AirPlayCodecConfig =
+      if (AirPlayH265.isConfig(payload)) AirPlayH265.parseConfig(payload, format) else AirPlayH264.parseConfig(payload, format)
+  }
+}
+
+data class AirPlayAvcConfig(
+  val sps: ByteArray,
+  val pps: ByteArray,
+  override val width: Int = 1920,
+  override val height: Int = 1080
+) : AirPlayCodecConfig {
+  override val mimeType = "video/avc"
+  override val csd get() = listOf(START_CODE + sps, START_CODE + pps)
+  val annexB: ByteArray get() = START_CODE + sps + START_CODE + pps
+}
+
+data class AirPlayHevcConfig(
+  val vps: ByteArray,
+  val sps: ByteArray,
+  val pps: ByteArray,
+  override val width: Int = 1920,
+  override val height: Int = 1080
+) : AirPlayCodecConfig {
+  override val mimeType = "video/hevc"
+  override val csd get() = listOf(START_CODE + vps + START_CODE + sps + START_CODE + pps)
+}
+
 data class AirPlayVideoPacket(
   val type: Int,
   val option: Int,
@@ -59,9 +93,9 @@ data class AirPlayVideoPacket(
   }
 }
 
-object AirPlayH264 {
-  private val startCode = byteArrayOf(0, 0, 0, 1)
+private val START_CODE = byteArrayOf(0, 0, 0, 1)
 
+object AirPlayH264 {
   fun configToAnnexB(payload: ByteArray): ByteArray {
     return parseConfig(payload).annexB
   }
@@ -82,6 +116,38 @@ object AirPlayH264 {
   }
 
   fun samplesToAnnexB(payload: ByteArray) {
+    AirPlayNalUnits.samplesToAnnexB(payload)
+  }
+
+  private fun u16(bytes: ByteArray, offset: Int) = ((bytes[offset].toInt() and 0xff) shl 8) or (bytes[offset + 1].toInt() and 0xff)
+}
+
+object AirPlayH265 {
+  fun isConfig(payload: ByteArray) = payload.size >= 0x79 && payload[4] == 'h'.code.toByte() && payload[5] == 'v'.code.toByte() && payload[6] == 'c'.code.toByte() && payload[7] == '1'.code.toByte()
+
+  fun parseConfig(payload: ByteArray, format: AirPlayVideoFormat? = null): AirPlayHevcConfig {
+    require(isConfig(payload)) { "HEVC config is missing hvc1 marker" }
+    var offset = 0x75
+    val vps = payload.hevcArray(offset, 0xa0.toByte()).also { offset = it.nextOffset }.bytes
+    val sps = payload.hevcArray(offset, 0xa1.toByte()).also { offset = it.nextOffset }.bytes
+    val pps = payload.hevcArray(offset, 0xa2.toByte()).bytes
+    return AirPlayHevcConfig(vps, sps, pps, width = format?.width ?: 1920, height = format?.height ?: 1080)
+  }
+
+  private data class HevcArray(val bytes: ByteArray, val nextOffset: Int)
+
+  private fun ByteArray.hevcArray(offset: Int, type: Byte): HevcArray {
+    require(size >= offset + 5) { "HEVC config array is truncated" }
+    require(this[offset] == type && this[offset + 1] == 0.toByte() && this[offset + 2] == 1.toByte()) { "HEVC config has unexpected array type" }
+    val length = ((this[offset + 3].toInt() and 0xff) shl 8) or (this[offset + 4].toInt() and 0xff)
+    val start = offset + 5
+    require(length > 0 && size >= start + length) { "HEVC config NAL is truncated" }
+    return HevcArray(copyOfRange(start, start + length), start + length)
+  }
+}
+
+object AirPlayNalUnits {
+  fun samplesToAnnexB(payload: ByteArray) {
     var offset = 0
     while (offset + 4 <= payload.size) {
       val naluSize = u32(payload, offset)
@@ -95,7 +161,6 @@ object AirPlayH264 {
     }
   }
 
-  private fun u16(bytes: ByteArray, offset: Int) = ((bytes[offset].toInt() and 0xff) shl 8) or (bytes[offset + 1].toInt() and 0xff)
   private fun u32(bytes: ByteArray, offset: Int) =
     ((bytes[offset].toInt() and 0xff) shl 24) or ((bytes[offset + 1].toInt() and 0xff) shl 16) or ((bytes[offset + 2].toInt() and 0xff) shl 8) or (bytes[offset + 3].toInt() and 0xff)
 }

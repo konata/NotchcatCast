@@ -12,19 +12,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
-data class AirPlayAvcConfig(
-  val sps: ByteArray,
-  val pps: ByteArray,
-  val width: Int = 1920,
-  val height: Int = 1080
-) {
-  val annexB: ByteArray get() = START_CODE + sps + START_CODE + pps
-
-  companion object {
-    private val START_CODE = byteArrayOf(0, 0, 0, 1)
-  }
-}
-
 internal data class AirPlayInputWrite(val queued: Boolean, val size: Int)
 
 internal object AirPlayCodecInput {
@@ -37,7 +24,7 @@ internal object AirPlayCodecInput {
 }
 
 interface AirPlayMirrorSink {
-  fun onMirrorConfig(config: AirPlayAvcConfig)
+  fun onMirrorConfig(config: AirPlayCodecConfig)
   fun onMirrorFrame(frame: ByteArray)
   fun onMirrorStopped()
 }
@@ -46,7 +33,7 @@ object AirPlayMirrorBus {
   private val lock = Any()
   private var sink: AirPlayMirrorSink? = null
   private var active = false
-  private var config: AirPlayAvcConfig? = null
+  private var config: AirPlayCodecConfig? = null
 
   fun attach(target: AirPlayMirrorSink) = synchronized(lock) {
     sink = target
@@ -62,7 +49,7 @@ object AirPlayMirrorBus {
     config = null
   }
 
-  fun config(value: AirPlayAvcConfig) {
+  fun config(value: AirPlayCodecConfig) {
     val target = synchronized(lock) {
       active = true
       config = value
@@ -104,7 +91,7 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
     }
   }
 
-  override fun onMirrorConfig(config: AirPlayAvcConfig) {
+  override fun onMirrorConfig(config: AirPlayCodecConfig) {
     events.trySend(Event.Config(config))
   }
 
@@ -122,13 +109,12 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
     scope.cancel()
   }
 
-  private fun configure(config: AirPlayAvcConfig) {
+  private fun configure(config: AirPlayCodecConfig) {
     releaseCodec()
     ptsUs = 0L
-    codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
-      val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, config.width, config.height)
-      format.setByteBuffer("csd-0", ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1) + config.sps))
-      format.setByteBuffer("csd-1", ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1) + config.pps))
+    codec = MediaCodec.createDecoderByType(config.mimeType).apply {
+      val format = MediaFormat.createVideoFormat(config.mimeType, config.width, config.height)
+      config.csd.forEachIndexed { index, bytes -> format.setByteBuffer("csd-$index", ByteBuffer.wrap(bytes)) }
       configure(format, surface, null, 0)
       start()
     }
@@ -164,7 +150,7 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
   }
 
   private sealed interface Event {
-    data class Config(val config: AirPlayAvcConfig) : Event
+    data class Config(val config: AirPlayCodecConfig) : Event
     data class Frame(val frame: ByteArray) : Event
     data object Stop : Event
   }

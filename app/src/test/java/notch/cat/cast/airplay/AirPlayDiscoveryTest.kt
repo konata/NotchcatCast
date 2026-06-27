@@ -11,7 +11,7 @@ class AirPlayDiscoveryTest {
     val raop = AirPlayTxt.raop("pk-value")
 
     assertEquals("62:6D:04:15:E7:2F", id)
-    assertEquals("0x5A7FFEE6,0x0", airplay["features"])
+    assertEquals("0x5A7FFEE6,0x400", airplay["features"])
     assertEquals("0x4", airplay["flags"])
     assertEquals("AppleTV3,2", airplay["model"])
     assertEquals("uuid-value", airplay["pi"])
@@ -23,7 +23,7 @@ class AirPlayDiscoveryTest {
         "da" to "true",
         "et" to "0,3,5",
         "vv" to "2",
-        "ft" to "0x5A7FFEE6,0x0",
+        "ft" to "0x5A7FFEE6,0x400",
         "am" to "AppleTV3,2",
         "md" to "0,1,2",
         "rhd" to "5.6.0.0",

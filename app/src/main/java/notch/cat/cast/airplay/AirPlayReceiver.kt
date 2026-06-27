@@ -240,14 +240,15 @@ class AirPlayReceiver(
         }
         when (packet.payloadType) {
           AirPlayVideoPayload.CODEC_CONFIG -> {
-            Log.i(TAG, "AirPlay video config bytes=${packet.payload.size} format=${packet.format?.width}x${packet.format?.height}")
-            AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload, packet.format))
+            val config = AirPlayCodecConfig.parse(packet.payload, packet.format)
+            Log.i(TAG, "AirPlay video config codec=${config.mimeType} bytes=${packet.payload.size} format=${config.width}x${config.height}")
+            AirPlayMirrorBus.config(config)
           }
 
           AirPlayVideoPayload.FRAME -> {
             if (packet.payload.isNotEmpty()) {
               decryptor.decrypt(packet.payload)
-              AirPlayH264.samplesToAnnexB(packet.payload)
+              AirPlayNalUnits.samplesToAnnexB(packet.payload)
               frames += 1
               if (frames == 1 || frames % 300 == 0) Log.i(TAG, "AirPlay video frame count=$frames bytes=${packet.payload.size}")
               AirPlayMirrorBus.frame(packet.payload)
