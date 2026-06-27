@@ -52,4 +52,16 @@ class AirPlayRtspTest {
     assert(text.contains("\r\nPublic: OPTIONS\r\n"))
     assert(text.endsWith("\r\n\r\n"))
   }
+
+  @Test
+  fun explicitEmptyTypedResponseKeepsContentType() {
+    val request = AirPlayRtsp.Request("POST", "/pair-verify", "RTSP/1.0", mapOf("cseq" to "2"), ByteArray(0))
+
+    val typed = String(AirPlayRtsp.Response.ok(ByteArray(0), "application/octet-stream").bytes(request), Charsets.ISO_8859_1)
+    val empty = String(AirPlayRtsp.Response.empty().bytes(request), Charsets.ISO_8859_1)
+
+    assert(typed.contains("\r\nContent-Type: application/octet-stream\r\n"))
+    assert(typed.contains("\r\nContent-Length: 0\r\n"))
+    assert(!empty.contains("\r\nContent-Type:"))
+  }
 }

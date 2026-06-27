@@ -13,7 +13,7 @@ internal object AirPlayRtsp {
     val status: Int,
     val reason: String,
     val body: ByteArray = ByteArray(0),
-    val contentType: String = "text/plain",
+    val contentType: String? = null,
     val extra: Map<String, String> = emptyMap(),
     val close: Boolean = false
   ) {
@@ -26,7 +26,7 @@ internal object AirPlayRtsp {
         add("Server: AirTunes/${AirPlayProfile.SOURCE_VERSION}")
         add("Audio-Jack-Status: connected; type=analog")
         add("Content-Length: ${body.size}")
-        if (body.isNotEmpty()) add("Content-Type: $contentType")
+        contentType?.let { add("Content-Type: $it") }
         extra.forEach { (key, value) -> add("$key: $value") }
       }.joinToString("\r\n", postfix = "\r\n\r\n")
       return headers.toByteArray(Charsets.ISO_8859_1) + body
