@@ -28,7 +28,7 @@ class AirPlayReceiver(
 ) {
   private var scope: CoroutineScope? = null
   private var server: ServerSocket? = null
-  private var videoServer: ServerSocket? = null
+  private var video: AirPlayVideoServer? = null
   private var audio: AirPlayAudio? = null
   private var discovery: AirPlayDiscovery? = null
   private var timing: AirPlayTiming? = null
@@ -45,6 +45,12 @@ class AirPlayReceiver(
     scope = activeScope
     timing = AirPlayTiming(activeScope)
     audio = AirPlayAudio(activeScope)
+    video = AirPlayVideoServer(
+      scope = activeScope,
+      decrypt = { session.videoDecryptor().decrypt(it) },
+      event = ::handleVideoEvent,
+      stopped = ::videoStopped
+    )
     activeScope.launch { controlLoop(socket, activeScope) }
     discovery = AirPlayDiscovery(context, uuid, session.publicKeyHex).also { it.register(socket.localPort) }
     return socket.localPort
@@ -57,11 +63,11 @@ class AirPlayReceiver(
     discovery?.unregister()
     discovery = null
     runCatching { server?.close() }
-    runCatching { videoServer?.close() }
+    video?.stop()
     closeAudio()
     timing?.stop()
     server = null
-    videoServer = null
+    video = null
     audio = null
     timing = null
     AirPlayMirrorBus.stop()
@@ -201,66 +207,28 @@ class AirPlayReceiver(
   }
 
   private fun startVideoServer(): Int {
-    videoServer?.let { return it.localPort }
-    val socket = ServerSocket(0)
-    videoServer = socket
-    Log.i(TAG, "AirPlay video listening on ${socket.localPort}")
-    scope?.launch { videoLoop(socket) }
-    return socket.localPort
+    return (video ?: error("AirPlay video server unavailable")).start()
   }
 
-  private fun videoLoop(socket: ServerSocket) {
-    while (scope?.isActive == true) {
-      val client = runCatching { socket.accept() }.getOrElse { return }
-      handleVideo(client)
-    }
-  }
-
-  private fun handleVideo(socket: Socket) {
-    socket.use {
-      val input = it.getInputStream()
-      val decryptor by lazy { session.videoDecryptor() }
-      var frames = 0
-      while (scope?.isActive == true) {
-        val header = input.readFully(VIDEO_HEADER_BYTES) ?: break
-        val payloadSize = header.leInt(0)
-        if (payloadSize < 0 || payloadSize > MAX_VIDEO_PAYLOAD_BYTES) {
-          Log.w(TAG, "AirPlay video payload has invalid size: $payloadSize")
-          break
-        }
-        val packetBytes = ByteArray(VIDEO_HEADER_BYTES + payloadSize)
-        System.arraycopy(header, 0, packetBytes, 0, header.size)
-        val payload = input.readFully(payloadSize) ?: break
-        System.arraycopy(payload, 0, packetBytes, VIDEO_HEADER_BYTES, payloadSize)
-        val packet = AirPlayVideoPacket.parse(packetBytes)
-        when (packet.control) {
-          AirPlayVideoControl.SUSPEND -> Log.i(TAG, "AirPlay video suspend")
-          AirPlayVideoControl.RESUME -> Log.i(TAG, "AirPlay video resume")
-          AirPlayVideoControl.NONE -> Unit
-        }
-        when (packet.payloadType) {
-          AirPlayVideoPayload.CODEC_CONFIG -> {
-            val config = AirPlayCodecConfig.parse(packet.payload, packet.format)
-            Log.i(TAG, "AirPlay video config codec=${config.mimeType} bytes=${packet.payload.size} format=${config.width}x${config.height}")
-            AirPlayMirrorBus.config(config)
-          }
-
-          AirPlayVideoPayload.FRAME -> {
-            if (packet.payload.isNotEmpty()) {
-              decryptor.decrypt(packet.payload)
-              AirPlayNalUnits.samplesToAnnexB(packet.payload)
-              frames += 1
-              if (frames == 1 || frames % 300 == 0) Log.i(TAG, "AirPlay video frame count=$frames bytes=${packet.payload.size}")
-              AirPlayMirrorBus.frame(packet.payload)
-            }
-          }
-
-          AirPlayVideoPayload.EMPTY_CONFIG -> Log.w(TAG, "AirPlay video codec config is empty")
-          AirPlayVideoPayload.KEEP_ALIVE, AirPlayVideoPayload.REPORT -> Unit
-          AirPlayVideoPayload.UNKNOWN -> Log.w(TAG, "AirPlay video packet type=${packet.type} bytes=${packet.payload.size}")
-        }
+  private fun handleVideoEvent(event: AirPlayVideoStreamEvent) {
+    when (event) {
+      AirPlayVideoStreamEvent.Suspend -> Log.i(TAG, "AirPlay video suspend")
+      AirPlayVideoStreamEvent.Resume -> Log.i(TAG, "AirPlay video resume")
+      is AirPlayVideoStreamEvent.Config -> {
+        val config = event.config
+        Log.i(TAG, "AirPlay video config codec=${config.mimeType} format=${config.width}x${config.height}")
+        AirPlayMirrorBus.config(config)
       }
+      is AirPlayVideoStreamEvent.Frame -> {
+        if (event.count == 1 || event.count % 300 == 0) Log.i(TAG, "AirPlay video frame count=${event.count} bytes=${event.bytes.size}")
+        AirPlayMirrorBus.frame(event.bytes)
+      }
+      AirPlayVideoStreamEvent.EmptyConfig -> Log.w(TAG, "AirPlay video codec config is empty")
+      is AirPlayVideoStreamEvent.Unknown -> Log.w(TAG, "AirPlay video packet type=${event.type} bytes=${event.bytes}")
     }
+  }
+
+  private fun videoStopped() {
     AirPlayMirrorBus.stop()
     send(CastCommand.StopMirror)
   }
@@ -296,9 +264,5 @@ class AirPlayReceiver(
     const val TAG = "mang"
     const val BPLIST = "application/x-apple-binary-plist"
     const val XML_PLIST = "text/x-apple-plist+xml"
-    const val VIDEO_HEADER_BYTES = 128
-    const val MAX_VIDEO_PAYLOAD_BYTES = 8 * 1024 * 1024
   }
 }
-
-private fun ByteArray.leInt(offset: Int) = (this[offset].toInt() and 0xff) or ((this[offset + 1].toInt() and 0xff) shl 8) or ((this[offset + 2].toInt() and 0xff) shl 16) or ((this[offset + 3].toInt() and 0xff) shl 24)

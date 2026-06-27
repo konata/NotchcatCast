@@ -9,6 +9,39 @@ enum class AirPlayVideoPayload { FRAME, CODEC_CONFIG, EMPTY_CONFIG, KEEP_ALIVE, 
 
 data class AirPlayVideoFormat(val sourceWidth: Int, val sourceHeight: Int, val width: Int, val height: Int)
 
+sealed interface AirPlayVideoStreamEvent {
+  data object Suspend : AirPlayVideoStreamEvent
+  data object Resume : AirPlayVideoStreamEvent
+  data class Config(val config: AirPlayCodecConfig) : AirPlayVideoStreamEvent
+  data class Frame(val bytes: ByteArray, val count: Int) : AirPlayVideoStreamEvent
+  data object EmptyConfig : AirPlayVideoStreamEvent
+  data class Unknown(val type: Int, val bytes: Int) : AirPlayVideoStreamEvent
+}
+
+class AirPlayVideoStream(private val decrypt: (ByteArray) -> Unit) {
+  private var frames = 0
+
+  fun handle(packet: AirPlayVideoPacket): List<AirPlayVideoStreamEvent> = buildList {
+    when (packet.control) {
+      AirPlayVideoControl.SUSPEND -> add(AirPlayVideoStreamEvent.Suspend)
+      AirPlayVideoControl.RESUME -> add(AirPlayVideoStreamEvent.Resume)
+      AirPlayVideoControl.NONE -> Unit
+    }
+    when (packet.payloadType) {
+      AirPlayVideoPayload.CODEC_CONFIG -> add(AirPlayVideoStreamEvent.Config(AirPlayCodecConfig.parse(packet.payload, packet.format)))
+      AirPlayVideoPayload.FRAME -> if (packet.payload.isNotEmpty()) {
+        decrypt(packet.payload)
+        AirPlayNalUnits.samplesToAnnexB(packet.payload)
+        frames += 1
+        add(AirPlayVideoStreamEvent.Frame(packet.payload, frames))
+      }
+      AirPlayVideoPayload.EMPTY_CONFIG -> add(AirPlayVideoStreamEvent.EmptyConfig)
+      AirPlayVideoPayload.KEEP_ALIVE, AirPlayVideoPayload.REPORT -> Unit
+      AirPlayVideoPayload.UNKNOWN -> add(AirPlayVideoStreamEvent.Unknown(packet.type, packet.payload.size))
+    }
+  }
+}
+
 sealed interface AirPlayCodecConfig {
   val mimeType: String
   val width: Int
