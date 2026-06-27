@@ -90,7 +90,7 @@ class AirPlayReceiver(
           return
         } ?: return
         val path = request.path.substringBefore("?")
-        Log.i(TAG, "AirPlay ${request.method} $path from=${socket.inetAddress.hostAddress}:${socket.port} len=${request.body.size}")
+        Log.i(TAG, "AirPlay ${AirPlayRequestLog.summary(request)} from=${socket.inetAddress.hostAddress}:${socket.port}")
         val response = runCatching { route(request, socket.inetAddress) }.getOrElse { error ->
           Log.e(TAG, "AirPlay handler failed", error)
           RtspResponse(500, "Internal Server Error", error.message.orEmpty().toByteArray(Charsets.UTF_8), "text/plain")
