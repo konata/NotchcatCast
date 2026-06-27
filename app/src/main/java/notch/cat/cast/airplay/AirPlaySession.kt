@@ -6,6 +6,8 @@ import com.github.serezhka.airplay.lib.internal.Pairing
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
+internal data class AirPlayPairVerifyResult(val response: ByteArray, val step: Int, val verified: Boolean)
+
 internal class AirPlaySession(publicKeySeed: ByteArray? = null) {
   private val pairing = publicKeySeed?.let(::Pairing) ?: Pairing()
   private val fairPlay = FairPlay()
@@ -22,7 +24,12 @@ internal class AirPlaySession(publicKeySeed: ByteArray? = null) {
     }
 
   fun pairSetup() = ByteArrayOutputStream().also { pairing.pairSetup(it) }.toByteArray()
-  fun pairVerify(body: ByteArray) = ByteArrayOutputStream().also { pairing.pairVerify(ByteArrayInputStream(body), it) }.toByteArray()
+  fun pairVerify(body: ByteArray): AirPlayPairVerifyResult {
+    val step = body.firstOrNull()?.toInt()?.and(0xff) ?: -1
+    val response = ByteArrayOutputStream().also { pairing.pairVerify(ByteArrayInputStream(body), it) }.toByteArray()
+    return AirPlayPairVerifyResult(response, step, pairing.isPairVerified)
+  }
+
   fun fairPlaySetup(body: ByteArray) = ByteArrayOutputStream().also { fairPlay.fairPlaySetup(ByteArrayInputStream(body), it) }.toByteArray()
 
   fun videoDecryptor(): FairPlayVideoDecryptor {

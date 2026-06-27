@@ -123,7 +123,7 @@ class AirPlayReceiver(
       request.method == "POST" && path == "/rate" -> RtspResponse.empty()
       request.method == "POST" && path == "/stop" -> send(CastCommand.Stop).let { RtspResponse.empty() }
       request.method == "POST" && path == "/pair-setup" -> RtspResponse.ok(session.pairSetup(), "application/octet-stream")
-      request.method == "POST" && path == "/pair-verify" -> RtspResponse.ok(session.pairVerify(request.body), "application/octet-stream")
+      request.method == "POST" && path == "/pair-verify" -> pairVerify(request)
       request.method == "POST" && path == "/fp-setup" -> RtspResponse.ok(session.fairPlaySetup(request.body), "application/octet-stream")
       request.method == "OPTIONS" -> RtspResponse.empty(extra = mapOf("Public" to "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER"))
       request.method == "SETUP" -> setup(request, remote)
@@ -143,6 +143,12 @@ class AirPlayReceiver(
     Log.i(TAG, "AirPlay URL host=${runCatching { Uri.parse(uri).host.orEmpty() }.getOrDefault("")}")
     send(CastCommand.Load(uri, play = true))
     return RtspResponse.empty()
+  }
+
+  private fun pairVerify(request: RtspRequest): RtspResponse {
+    val result = session.pairVerify(request.body)
+    Log.i(TAG, "AirPlay pair-verify step=${result.step} verified=${result.verified} response=${result.response.size}")
+    return RtspResponse.ok(result.response, "application/octet-stream", close = result.step == 0 && !result.verified)
   }
 
   private fun setup(request: RtspRequest, remote: InetAddress): RtspResponse = when (val setup = AirPlaySetup.parse(request.body)) {
