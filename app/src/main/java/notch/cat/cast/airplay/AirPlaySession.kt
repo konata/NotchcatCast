@@ -29,8 +29,7 @@ internal class AirPlaySession {
     val active = videoDecryptor
     if (active != null) return active
     val key = ekey ?: error("AirPlay ekey missing")
-    val secret = pairing.sharedSecret ?: error("AirPlay shared secret missing")
     val connectionId = streamConnectionId ?: error("AirPlay streamConnectionID missing")
-    return FairPlayVideoDecryptor(fairPlay.decryptAesKey(key), secret, connectionId).also { videoDecryptor = it }
+    return FairPlayVideoDecryptor(fairPlay.decryptAesKey(key), pairing.sharedSecret, connectionId).also { videoDecryptor = it }
   }
 }

@@ -53,18 +53,21 @@ public class FairPlayVideoDecryptor {
 
     private void initAesCtrCipher() throws Exception {
         MessageDigest sha512Digest = MessageDigest.getInstance("SHA-512");
-        sha512Digest.update(aesKey);
-        sha512Digest.update(sharedSecret);
-        byte[] eaesKey = sha512Digest.digest();
+        byte[] streamSeed = aesKey;
+        if (sharedSecret != null) {
+            sha512Digest.update(aesKey);
+            sha512Digest.update(sharedSecret);
+            streamSeed = sha512Digest.digest();
+        }
 
         byte[] skey = ("AirPlayStreamKey" + streamConnectionID).getBytes(StandardCharsets.UTF_8);
         sha512Digest.update(skey);
-        sha512Digest.update(eaesKey, 0, 16);
+        sha512Digest.update(streamSeed, 0, 16);
         byte[] hash1 = sha512Digest.digest();
 
         byte[] siv = ("AirPlayStreamIV" + streamConnectionID).getBytes(StandardCharsets.UTF_8);
         sha512Digest.update(siv);
-        sha512Digest.update(eaesKey, 0, 16);
+        sha512Digest.update(streamSeed, 0, 16);
         byte[] hash2 = sha512Digest.digest();
 
         byte[] decryptAesKey = new byte[16];
