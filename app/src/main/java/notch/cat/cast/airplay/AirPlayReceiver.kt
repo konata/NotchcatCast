@@ -58,8 +58,7 @@ class AirPlayReceiver(
     discovery = null
     runCatching { server?.close() }
     runCatching { videoServer?.close() }
-    runCatching { audioDataSocket?.close() }
-    runCatching { audioControlSocket?.close() }
+    closeAudio()
     timing?.stop()
     server = null
     videoServer = null
@@ -132,7 +131,7 @@ class AirPlayReceiver(
       request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
       AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = mapOf("Session" to "1"))
       AirPlayControl.isMisdirected(request.method, path) -> RtspResponse(421, "Misdirected Request")
-      request.method == "TEARDOWN" -> teardown()
+      request.method == "TEARDOWN" -> teardown(request)
       else -> RtspResponse(404, "Not Found", "Not Found".toByteArray(), "text/plain")
     }
   }
@@ -177,10 +176,21 @@ class AirPlayReceiver(
     AirPlaySetup.Empty -> RtspResponse.empty(extra = mapOf("Session" to "1"))
   }
 
-  private fun teardown(): RtspResponse {
-    AirPlayMirrorBus.stop()
-    send(CastCommand.StopMirror)
-    return RtspResponse.empty(extra = mapOf("Session" to "1"))
+  private fun teardown(request: RtspRequest): RtspResponse {
+    val teardown = AirPlayTeardown.parse(request.body)
+    if (teardown.stopAudio) closeAudio()
+    if (teardown.stopMirror) {
+      AirPlayMirrorBus.stop()
+      send(CastCommand.StopMirror)
+    }
+    return RtspResponse(200, "OK", extra = mapOf("Session" to "1", "Connection" to "close"), close = true)
+  }
+
+  private fun closeAudio() {
+    runCatching { audioDataSocket?.close() }
+    runCatching { audioControlSocket?.close() }
+    audioDataSocket = null
+    audioControlSocket = null
   }
 
   private fun startVideoServer(): Int {
