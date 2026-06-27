@@ -38,25 +38,26 @@ internal object AirPlayInfo {
   private fun info(name: String, uuid: String, deviceId: String, publicKey: ByteArray, full: Boolean) =
     NSDictionary().apply {
       if (full) {
+        put("initialVolume", 0.0)
         put("audioFormats", NSArray(
           NSDictionary().apply { put("type", 100); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
           NSDictionary().apply { put("type", 101); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
         ))
         put("audioLatencies", NSArray(
-          NSDictionary().apply { put("type", 100); put("audioType", "default"); put("inputLatencyMicros", false) },
-          NSDictionary().apply { put("type", 101); put("audioType", "default"); put("inputLatencyMicros", false) },
+          NSDictionary().apply { put("type", 100); put("audioType", "default"); put("inputLatencyMicros", 0); put("outputLatencyMicros", false) },
+          NSDictionary().apply { put("type", 101); put("audioType", "default"); put("inputLatencyMicros", 0); put("outputLatencyMicros", false) },
         ))
         put("displays", NSArray(NSDictionary().apply {
           put("features", 14)
           put("height", 1080)
           put("heightPixels", 1080)
-          put("heightPhysical", false)
+          put("heightPhysical", 0)
           put("width", 1920)
           put("widthPixels", 1920)
-          put("widthPhysical", false)
+          put("widthPhysical", 0)
           put("maxFPS", 60)
           put("overscanned", false)
-          put("refreshRate", 60)
+          put("refreshRate", 1.0 / 60.0)
           put("rotation", false)
           put("uuid", uuid)
         }))

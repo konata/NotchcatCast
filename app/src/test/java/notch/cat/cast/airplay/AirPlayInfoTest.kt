@@ -30,6 +30,25 @@ class AirPlayInfoTest {
   }
 
   @Test
+  fun fullInfoUsesUxPlayAudioAndDisplayShape() {
+    val info = AirPlayInfo.plist(
+      name = "莽莽投屏",
+      uuid = "626d0415-e72f-3f1d-8d3c-7b20056358ed",
+      deviceId = "62:6D:04:15:E7:2F",
+      publicKey = ByteArray(32)
+    ).dict()
+    val latency = info.maps("audioLatencies").first()
+    val display = info.maps("displays").first()
+
+    assertEquals(0.0, (info.objectForKey("initialVolume").toJavaObject() as Number).toDouble(), 0.000001)
+    assertEquals(0, (latency["inputLatencyMicros"] as Number).toInt())
+    assertEquals(false, latency["outputLatencyMicros"])
+    assertEquals(1.0 / 60.0, (display["refreshRate"] as Number).toDouble(), 0.000001)
+    assertEquals(0, (display["widthPhysical"] as Number).toInt())
+    assertEquals(0, (display["heightPhysical"] as Number).toInt())
+  }
+
+  @Test
   fun infoQualifierReturnsAirPlayTxtRecordOnly() {
     val publicKey = ByteArray(32) { it.toByte() }
     val publicKeyHex = publicKey.joinToString("") { "%02x".format(it.toInt() and 0xff) }
@@ -143,4 +162,5 @@ class AirPlayInfoTest {
   private fun NSDictionary.long(key: String) = (objectForKey(key).toJavaObject() as Number).toLong()
   private fun NSDictionary.string(key: String) = objectForKey(key).toJavaObject().toString()
   private fun NSDictionary.data(key: String) = (objectForKey(key) as NSData).bytes()
+  private fun NSDictionary.maps(key: String) = (objectForKey(key).toJavaObject() as Array<*>).map { it as Map<*, *> }
 }
