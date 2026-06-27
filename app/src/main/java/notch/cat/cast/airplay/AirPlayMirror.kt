@@ -12,7 +12,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
-data class AirPlayAvcConfig(val sps: ByteArray, val pps: ByteArray) {
+data class AirPlayAvcConfig(
+  val sps: ByteArray,
+  val pps: ByteArray,
+  val width: Int = 1920,
+  val height: Int = 1080
+) {
   val annexB: ByteArray get() = START_CODE + sps + START_CODE + pps
 
   companion object {
@@ -121,7 +126,7 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
     releaseCodec()
     ptsUs = 0L
     codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
-      val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1920, 1080)
+      val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, config.width, config.height)
       format.setByteBuffer("csd-0", ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1) + config.sps))
       format.setByteBuffer("csd-1", ByteBuffer.wrap(byteArrayOf(0, 0, 0, 1) + config.pps))
       configure(format, surface, null, 0)

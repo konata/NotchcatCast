@@ -233,8 +233,8 @@ class AirPlayReceiver(
         }
         when (packet.payloadType) {
           AirPlayVideoPayload.CODEC_CONFIG -> {
-            Log.i(TAG, "AirPlay video config bytes=${packet.payload.size}")
-            AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload))
+            Log.i(TAG, "AirPlay video config bytes=${packet.payload.size} format=${packet.format?.width}x${packet.format?.height}")
+            AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload, packet.format))
           }
 
           AirPlayVideoPayload.FRAME -> {

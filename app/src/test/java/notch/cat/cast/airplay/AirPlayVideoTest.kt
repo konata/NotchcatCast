@@ -50,17 +50,20 @@ class AirPlayVideoTest {
   }
 
   @Test
+  fun codecConfigCarriesMirrorDimensionsFromTypeOneHeader() {
+    val packet = videoPacket(type = 1, option = 0x0116, width = 334f, height = 720f, payload = avcConfigPayload())
+    val config = AirPlayH264.parseConfig(packet.payload, packet.format)
+
+    assertEquals(AirPlayVideoFormat(sourceWidth = 334, sourceHeight = 720, width = 334, height = 720), packet.format)
+    assertEquals(334, config.width)
+    assertEquals(720, config.height)
+  }
+
+  @Test
   fun avcConfigExtractsSpsAndPpsAsAnnexB() {
     val sps = byteArrayOf(0x67, 0x64, 0x00, 0x20)
     val pps = byteArrayOf(0x68, 0xee.toByte(), 0x3c, 0x80.toByte())
-    val payload = byteArrayOf(
-      1, 0x64, 0, 0x20, -1, -31,
-      0, sps.size.toByte(),
-      *sps,
-      1,
-      0, pps.size.toByte(),
-      *pps
-    )
+    val payload = avcConfigPayload(sps, pps)
 
     assertArrayEquals(
       byteArrayOf(0, 0, 0, 1, *sps, 0, 0, 0, 1, *pps),
@@ -84,15 +87,33 @@ class AirPlayVideoTest {
     assertArrayEquals(byteArrayOf(0, 0, 0, 1, *first, 0, 0, 0, 1, *second), samples)
   }
 
-  private fun videoPacket(type: Int, option: Int = 0, payload: ByteArray): AirPlayVideoPacket {
+  private fun videoPacket(type: Int, option: Int = 0, width: Float = 0f, height: Float = 0f, payload: ByteArray): AirPlayVideoPacket {
     val buffer = ByteBuffer.allocate(128 + payload.size).order(ByteOrder.LITTLE_ENDIAN)
     buffer.putInt(payload.size)
     buffer.put(type.toByte())
     buffer.put(0)
     buffer.putShort(option.toShort())
     buffer.putLong(42L)
+    buffer.putFloat(16, width)
+    buffer.putFloat(20, height)
+    buffer.putFloat(40, width)
+    buffer.putFloat(44, height)
+    buffer.putFloat(56, width)
+    buffer.putFloat(60, height)
     buffer.position(128)
     buffer.put(payload)
     return AirPlayVideoPacket.parse(buffer.array())
   }
+
+  private fun avcConfigPayload(
+    sps: ByteArray = byteArrayOf(0x67, 0x64, 0x00, 0x20),
+    pps: ByteArray = byteArrayOf(0x68, 0xee.toByte(), 0x3c, 0x80.toByte())
+  ) = byteArrayOf(
+    1, 0x64, 0, 0x20, -1, -31,
+    0, sps.size.toByte(),
+    *sps,
+    1,
+    0, pps.size.toByte(),
+    *pps
+  )
 }

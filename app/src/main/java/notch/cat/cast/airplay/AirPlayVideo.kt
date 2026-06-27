@@ -7,7 +7,15 @@ enum class AirPlayVideoControl { NONE, SUSPEND, RESUME }
 
 enum class AirPlayVideoPayload { FRAME, CODEC_CONFIG, EMPTY_CONFIG, KEEP_ALIVE, REPORT, UNKNOWN }
 
-data class AirPlayVideoPacket(val type: Int, val option: Int, val timestamp: Long, val payload: ByteArray) {
+data class AirPlayVideoFormat(val sourceWidth: Int, val sourceHeight: Int, val width: Int, val height: Int)
+
+data class AirPlayVideoPacket(
+  val type: Int,
+  val option: Int,
+  val timestamp: Long,
+  val payload: ByteArray,
+  val format: AirPlayVideoFormat? = null
+) {
   val control: AirPlayVideoControl
     get() = when (option) {
       0x0156, 0x015e -> AirPlayVideoControl.SUSPEND
@@ -36,7 +44,17 @@ data class AirPlayVideoPacket(val type: Int, val option: Int, val timestamp: Lon
       val option = (bytes[6].toInt() and 0xff) or ((bytes[7].toInt() and 0xff) shl 8)
       header.position(8)
       val timestamp = header.long
-      return AirPlayVideoPacket(type, option, timestamp, bytes.copyOfRange(HEADER_BYTES, HEADER_BYTES + payloadSize))
+      return AirPlayVideoPacket(type, option, timestamp, bytes.copyOfRange(HEADER_BYTES, HEADER_BYTES + payloadSize), parseFormat(type, bytes))
+    }
+
+    private fun parseFormat(type: Int, bytes: ByteArray): AirPlayVideoFormat? {
+      if (type != 1) return null
+      fun dimension(offset: Int) = ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.LITTLE_ENDIAN).float.toInt().takeIf { it > 0 }
+      val sourceWidth = dimension(40) ?: dimension(16) ?: return null
+      val sourceHeight = dimension(44) ?: dimension(20) ?: return null
+      val width = dimension(56) ?: sourceWidth
+      val height = dimension(60) ?: sourceHeight
+      return AirPlayVideoFormat(sourceWidth, sourceHeight, width, height)
     }
   }
 }
@@ -48,7 +66,7 @@ object AirPlayH264 {
     return parseConfig(payload).annexB
   }
 
-  fun parseConfig(payload: ByteArray): AirPlayAvcConfig {
+  fun parseConfig(payload: ByteArray, format: AirPlayVideoFormat? = null): AirPlayAvcConfig {
     require(payload.size >= 8) { "AVC config is too short" }
     var offset = 6
     val spsLength = u16(payload, offset)
@@ -60,7 +78,7 @@ object AirPlayH264 {
     offset += 2
     require(payload.size >= offset + ppsLength) { "AVC config has truncated PPS" }
     val pps = payload.copyOfRange(offset, offset + ppsLength)
-    return AirPlayAvcConfig(sps, pps)
+    return AirPlayAvcConfig(sps, pps, width = format?.width ?: 1920, height = format?.height ?: 1080)
   }
 
   fun samplesToAnnexB(payload: ByteArray) {
