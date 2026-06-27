@@ -30,6 +30,26 @@ class AirPlayVideoTest {
   }
 
   @Test
+  fun packetClassifiesSuspendAndResumeControlsSeparatelyFromPayload() {
+    val suspend = videoPacket(type = 1, option = 0x0156, payload = ByteArray(0))
+    val resume = videoPacket(type = 1, option = 0x0116, payload = byteArrayOf(1, 2, 3))
+
+    assertEquals(AirPlayVideoControl.SUSPEND, suspend.control)
+    assertEquals(AirPlayVideoPayload.EMPTY_CONFIG, suspend.payloadType)
+    assertEquals(AirPlayVideoControl.RESUME, resume.control)
+    assertEquals(AirPlayVideoPayload.CODEC_CONFIG, resume.payloadType)
+  }
+
+  @Test
+  fun packetClassifiesStreamingReportsAndKeepAlivesAsIgnorablePayloads() {
+    val report = videoPacket(type = 5, payload = byteArrayOf('b'.code.toByte(), 'p'.code.toByte()))
+    val keepAlive = videoPacket(type = 2, payload = ByteArray(0))
+
+    assertEquals(AirPlayVideoPayload.REPORT, report.payloadType)
+    assertEquals(AirPlayVideoPayload.KEEP_ALIVE, keepAlive.payloadType)
+  }
+
+  @Test
   fun avcConfigExtractsSpsAndPpsAsAnnexB() {
     val sps = byteArrayOf(0x67, 0x64, 0x00, 0x20)
     val pps = byteArrayOf(0x68, 0xee.toByte(), 0x3c, 0x80.toByte())
@@ -62,5 +82,17 @@ class AirPlayVideoTest {
     AirPlayH264.samplesToAnnexB(samples)
 
     assertArrayEquals(byteArrayOf(0, 0, 0, 1, *first, 0, 0, 0, 1, *second), samples)
+  }
+
+  private fun videoPacket(type: Int, option: Int = 0, payload: ByteArray): AirPlayVideoPacket {
+    val buffer = ByteBuffer.allocate(128 + payload.size).order(ByteOrder.LITTLE_ENDIAN)
+    buffer.putInt(payload.size)
+    buffer.put(type.toByte())
+    buffer.put(0)
+    buffer.putShort(option.toShort())
+    buffer.putLong(42L)
+    buffer.position(128)
+    buffer.put(payload)
+    return AirPlayVideoPacket.parse(buffer.array())
   }
 }

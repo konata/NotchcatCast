@@ -217,7 +217,7 @@ class AirPlayReceiver(
       while (scope?.isActive == true) {
         val header = input.readFully(VIDEO_HEADER_BYTES) ?: break
         val payloadSize = header.leInt(0)
-        if (payloadSize <= 0 || payloadSize > MAX_VIDEO_PAYLOAD_BYTES) {
+        if (payloadSize < 0 || payloadSize > MAX_VIDEO_PAYLOAD_BYTES) {
           Log.w(TAG, "AirPlay video payload has invalid size: $payloadSize")
           break
         }
@@ -226,19 +226,30 @@ class AirPlayReceiver(
         val payload = input.readFully(payloadSize) ?: break
         System.arraycopy(payload, 0, packetBytes, VIDEO_HEADER_BYTES, payloadSize)
         val packet = AirPlayVideoPacket.parse(packetBytes)
-        when (packet.type) {
-          1 -> {
+        when (packet.control) {
+          AirPlayVideoControl.SUSPEND -> Log.i(TAG, "AirPlay video suspend")
+          AirPlayVideoControl.RESUME -> Log.i(TAG, "AirPlay video resume")
+          AirPlayVideoControl.NONE -> Unit
+        }
+        when (packet.payloadType) {
+          AirPlayVideoPayload.CODEC_CONFIG -> {
             Log.i(TAG, "AirPlay video config bytes=${packet.payload.size}")
             AirPlayMirrorBus.config(AirPlayH264.parseConfig(packet.payload))
           }
 
-          0 -> {
-            decryptor.decrypt(packet.payload)
-            AirPlayH264.samplesToAnnexB(packet.payload)
-            frames += 1
-            if (frames == 1 || frames % 300 == 0) Log.i(TAG, "AirPlay video frame count=$frames bytes=${packet.payload.size}")
-            AirPlayMirrorBus.frame(packet.payload)
+          AirPlayVideoPayload.FRAME -> {
+            if (packet.payload.isNotEmpty()) {
+              decryptor.decrypt(packet.payload)
+              AirPlayH264.samplesToAnnexB(packet.payload)
+              frames += 1
+              if (frames == 1 || frames % 300 == 0) Log.i(TAG, "AirPlay video frame count=$frames bytes=${packet.payload.size}")
+              AirPlayMirrorBus.frame(packet.payload)
+            }
           }
+
+          AirPlayVideoPayload.EMPTY_CONFIG -> Log.w(TAG, "AirPlay video codec config is empty")
+          AirPlayVideoPayload.KEEP_ALIVE, AirPlayVideoPayload.REPORT -> Unit
+          AirPlayVideoPayload.UNKNOWN -> Log.w(TAG, "AirPlay video packet type=${packet.type} bytes=${packet.payload.size}")
         }
       }
     }

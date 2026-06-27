@@ -3,7 +3,27 @@ package notch.cat.cast.airplay
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
+enum class AirPlayVideoControl { NONE, SUSPEND, RESUME }
+
+enum class AirPlayVideoPayload { FRAME, CODEC_CONFIG, EMPTY_CONFIG, KEEP_ALIVE, REPORT, UNKNOWN }
+
 data class AirPlayVideoPacket(val type: Int, val option: Int, val timestamp: Long, val payload: ByteArray) {
+  val control: AirPlayVideoControl
+    get() = when (option) {
+      0x0156, 0x015e -> AirPlayVideoControl.SUSPEND
+      0x0116, 0x011e -> AirPlayVideoControl.RESUME
+      else -> AirPlayVideoControl.NONE
+    }
+
+  val payloadType: AirPlayVideoPayload
+    get() = when (type) {
+      0 -> AirPlayVideoPayload.FRAME
+      1 -> if (payload.isEmpty()) AirPlayVideoPayload.EMPTY_CONFIG else AirPlayVideoPayload.CODEC_CONFIG
+      2 -> AirPlayVideoPayload.KEEP_ALIVE
+      5 -> AirPlayVideoPayload.REPORT
+      else -> AirPlayVideoPayload.UNKNOWN
+    }
+
   companion object {
     private const val HEADER_BYTES = 128
 
