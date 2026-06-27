@@ -65,7 +65,7 @@ internal object AirPlayInfo {
       put("deviceID", deviceId)
       put("features", AirPlayProfile.FEATURES)
       put("keepAliveLowPower", 1)
-      put("keepAliveSendStatsAsBody", 1)
+      put("keepAliveSendStatsAsBody", true)
       put("macAddress", deviceId)
       put("model", AirPlayProfile.MODEL)
       put("name", name)

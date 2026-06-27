@@ -26,6 +26,7 @@ class AirPlayInfoTest {
     assertEquals("62:6D:04:15:E7:2F", info.string("deviceID"))
     assertEquals("62:6D:04:15:E7:2F", info.string("macAddress"))
     assertEquals(1, info.int("keepAliveLowPower"))
+    assertEquals(true, info.objectForKey("keepAliveSendStatsAsBody").toJavaObject())
     assertArrayEquals(publicKey, info.data("pk"))
   }
 
