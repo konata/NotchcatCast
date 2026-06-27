@@ -125,7 +125,7 @@ class AirPlayReceiver(
       request.method == "SETUP" -> setup(request, remote)
       request.method == "RECORD" -> RtspResponse.empty(extra = mapOf("Session" to "1", "Audio-Latency" to "11025"))
       request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
-      request.method == "SET_PARAMETER" || request.method == "FLUSH" || path == "/feedback" -> RtspResponse.empty(extra = mapOf("Session" to "1"))
+      AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = mapOf("Session" to "1"))
       request.method == "TEARDOWN" -> teardown()
       else -> RtspResponse(404, "Not Found", "Not Found".toByteArray(), "text/plain")
     }
