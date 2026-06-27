@@ -8,12 +8,14 @@ import java.nio.ByteOrder
 
 class AirPlayVideoTest {
   @Test
-  fun packetParserReadsLittleEndianHeader() {
+  fun packetParserReadsAirPlayVideoHeader() {
     val payload = byteArrayOf(1, 2, 3, 4, 5)
     val buffer = ByteBuffer.allocate(128 + payload.size).order(ByteOrder.LITTLE_ENDIAN)
     buffer.putInt(payload.size)
-    buffer.putShort(110)
-    buffer.putShort(7)
+    buffer.put(1)
+    buffer.put(0x10)
+    buffer.put(0x16)
+    buffer.put(1)
     buffer.putLong(123456789L)
     buffer.position(128)
     buffer.put(payload)
@@ -21,8 +23,8 @@ class AirPlayVideoTest {
 
     val packet = AirPlayVideoPacket.parse(bytes)
 
-    assertEquals(110, packet.type)
-    assertEquals(7, packet.option)
+    assertEquals(1, packet.type)
+    assertEquals(0x0116, packet.option)
     assertEquals(123456789L, packet.timestamp)
     assertArrayEquals(payload, packet.payload)
   }

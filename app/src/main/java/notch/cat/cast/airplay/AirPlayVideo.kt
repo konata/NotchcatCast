@@ -12,8 +12,9 @@ data class AirPlayVideoPacket(val type: Int, val option: Int, val timestamp: Lon
       val header = ByteBuffer.wrap(bytes, 0, HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN)
       val payloadSize = header.int
       require(payloadSize >= 0 && bytes.size >= HEADER_BYTES + payloadSize) { "Invalid AirPlay video payload length: $payloadSize" }
-      val type = header.short.toInt() and 0xffff
-      val option = header.short.toInt() and 0xffff
+      val type = bytes[4].toInt() and 0xff
+      val option = (bytes[6].toInt() and 0xff) or ((bytes[7].toInt() and 0xff) shl 8)
+      header.position(8)
       val timestamp = header.long
       return AirPlayVideoPacket(type, option, timestamp, bytes.copyOfRange(HEADER_BYTES, HEADER_BYTES + payloadSize))
     }
