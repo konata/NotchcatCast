@@ -63,8 +63,6 @@ internal object AirPlayRtsp {
   }
 }
 
-internal data class AirPlayStream(val type: Int, val connectionId: Long?)
-
 internal fun InputStream.readFully(size: Int): ByteArray? {
   val bytes = ByteArray(size)
   var offset = 0

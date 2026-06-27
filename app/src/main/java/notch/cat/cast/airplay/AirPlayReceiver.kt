@@ -3,7 +3,6 @@ package notch.cat.cast.airplay
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.dd.plist.BinaryPropertyListParser
 import com.dd.plist.BinaryPropertyListWriter
 import com.dd.plist.NSArray
 import com.dd.plist.NSData
@@ -17,6 +16,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.CastCommand
 import notch.cat.cast.R
+import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.DatagramSocket
@@ -35,6 +35,7 @@ class AirPlayReceiver(
   private var audioDataSocket: DatagramSocket? = null
   private var audioControlSocket: DatagramSocket? = null
   private var discovery: AirPlayDiscovery? = null
+  private var timing: AirPlayTiming? = null
   private val session = AirPlaySession()
 
   fun start(): Int {
@@ -46,6 +47,7 @@ class AirPlayReceiver(
     server = socket
     val activeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     scope = activeScope
+    timing = AirPlayTiming(activeScope)
     activeScope.launch { controlLoop(socket, activeScope) }
     discovery = AirPlayDiscovery(context, uuid, session.publicKeyHex).also { it.register(socket.localPort) }
     return socket.localPort
@@ -61,10 +63,12 @@ class AirPlayReceiver(
     runCatching { videoServer?.close() }
     runCatching { audioDataSocket?.close() }
     runCatching { audioControlSocket?.close() }
+    timing?.stop()
     server = null
     videoServer = null
     audioDataSocket = null
     audioControlSocket = null
+    timing = null
     AirPlayMirrorBus.stop()
   }
 
@@ -91,7 +95,7 @@ class AirPlayReceiver(
         } ?: return
         val path = request.path.substringBefore("?")
         Log.i(TAG, "AirPlay ${request.method} $path from=${socket.inetAddress.hostAddress}:${socket.port} len=${request.body.size}")
-        val response = runCatching { route(request) }.getOrElse { error ->
+        val response = runCatching { route(request, socket.inetAddress) }.getOrElse { error ->
           Log.e(TAG, "AirPlay handler failed", error)
           RtspResponse(500, "Internal Server Error", error.message.orEmpty().toByteArray(Charsets.UTF_8), "text/plain")
         }
@@ -103,7 +107,7 @@ class AirPlayReceiver(
     }
   }
 
-  private fun route(request: RtspRequest): RtspResponse {
+  private fun route(request: RtspRequest, remote: InetAddress): RtspResponse {
     val path = request.path.substringBefore("?")
     val isGet = request.method == "GET" || request.method == "HEAD"
     return when {
@@ -118,7 +122,7 @@ class AirPlayReceiver(
       request.method == "POST" && path == "/pair-verify" -> RtspResponse.ok(session.pairVerify(request.body), "application/octet-stream")
       request.method == "POST" && path == "/fp-setup" -> RtspResponse.ok(session.fairPlaySetup(request.body), "application/octet-stream")
       request.method == "OPTIONS" -> RtspResponse.empty(extra = mapOf("Public" to "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER"))
-      request.method == "SETUP" -> setup(request)
+      request.method == "SETUP" -> setup(request, remote)
       request.method == "RECORD" -> RtspResponse.empty(extra = mapOf("Session" to "1", "Audio-Latency" to "11025"))
       request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
       request.method == "SET_PARAMETER" || request.method == "FLUSH" || path == "/feedback" -> RtspResponse.empty(extra = mapOf("Session" to "1"))
@@ -136,27 +140,32 @@ class AirPlayReceiver(
     return RtspResponse.empty()
   }
 
-  private fun setup(request: RtspRequest): RtspResponse {
-    val plist = request.body.dictionary()
-    plist.bytes("ekey")?.let {
-      session.ekey = it
-      session.eiv = plist.bytes("eiv")
-      return RtspResponse.ok(setupPlist(eventPort = server?.localPort ?: 0, timingPort = 0), BPLIST, extra = mapOf("Session" to "1"))
+  private fun setup(request: RtspRequest, remote: InetAddress): RtspResponse = when (val setup = AirPlaySetup.parse(request.body)) {
+    is AirPlaySetup.Session -> {
+      session.ekey = setup.ekey
+      session.eiv = setup.eiv
+      val timingPort = setup.timingPort?.let { timing?.start(remote, it) } ?: 0
+      Log.i(TAG, "AirPlay SETUP session timing=${setup.timingProtocol}:${setup.timingPort} local=$timingPort")
+      RtspResponse.ok(AirPlaySetup.responseSession(eventPort = 0, timingPort = timingPort), BPLIST, extra = mapOf("Session" to "1"))
     }
 
-    val stream = plist.stream() ?: return RtspResponse.empty(extra = mapOf("Session" to "1"))
-    Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
-    return when (stream.type) {
-      110 -> {
-        session.streamConnectionId = java.lang.Long.toUnsignedString(stream.connectionId ?: 0L)
-        AirPlayMirrorBus.start()
-        send(CastCommand.StartMirror)
-        RtspResponse.ok(videoSetupPlist(startVideoServer()), BPLIST, extra = mapOf("Session" to "1"))
+    is AirPlaySetup.Stream -> {
+      val stream = setup.stream
+      Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
+      when (stream.type) {
+        110 -> {
+          session.streamConnectionId = stream.connectionId
+          AirPlayMirrorBus.start()
+          send(CastCommand.StartMirror)
+          RtspResponse.ok(AirPlaySetup.responseVideo(startVideoServer()), BPLIST, extra = mapOf("Session" to "1"))
+        }
+
+        96, 100, 101 -> RtspResponse.ok(audioSetupPlist(stream.type), BPLIST, extra = mapOf("Session" to "1"))
+        else -> RtspResponse.empty(extra = mapOf("Session" to "1"))
       }
-
-      96, 100, 101 -> RtspResponse.ok(audioSetupPlist(stream.type), BPLIST, extra = mapOf("Session" to "1"))
-      else -> RtspResponse.empty(extra = mapOf("Session" to "1"))
     }
+
+    AirPlaySetup.Empty -> RtspResponse.empty(extra = mapOf("Session" to "1"))
   }
 
   private fun teardown(): RtspResponse {
@@ -221,27 +230,7 @@ class AirPlayReceiver(
   private fun audioSetupPlist(type: Int): ByteArray {
     val data = audioDataSocket ?: DatagramSocket(0).also { audioDataSocket = it }
     val control = audioControlSocket ?: DatagramSocket(0).also { audioControlSocket = it }
-    return plist {
-      put("streams", NSArray(NSDictionary().apply {
-        put("type", type)
-        put("dataPort", data.localPort)
-        put("controlPort", control.localPort)
-      }))
-    }
-  }
-
-  private fun videoSetupPlist(videoPort: Int) = plist {
-    put("streams", NSArray(NSDictionary().apply {
-      put("type", 110)
-      put("dataPort", videoPort)
-    }))
-    put("eventPort", server?.localPort ?: 0)
-    put("timingPort", 0)
-  }
-
-  private fun setupPlist(eventPort: Int, timingPort: Int) = plist {
-    put("eventPort", eventPort)
-    put("timingPort", timingPort)
+    return AirPlaySetup.responseAudio(type, data.localPort, control.localPort)
   }
 
   private fun infoPlist() = plist {
@@ -322,15 +311,3 @@ class AirPlayReceiver(
 }
 
 private fun ByteArray.leInt(offset: Int) = (this[offset].toInt() and 0xff) or ((this[offset + 1].toInt() and 0xff) shl 8) or ((this[offset + 2].toInt() and 0xff) shl 16) or ((this[offset + 3].toInt() and 0xff) shl 24)
-
-private fun ByteArray.dictionary() = BinaryPropertyListParser.parse(this) as NSDictionary
-
-private fun NSDictionary.bytes(key: String): ByteArray? = objectForKey(key)?.toJavaObject() as? ByteArray
-
-private fun NSDictionary.stream(): AirPlayStream? {
-  val streams = objectForKey("streams")?.toJavaObject() as? Array<*> ?: return null
-  val stream = streams.firstOrNull() as? Map<*, *> ?: return null
-  val type = (stream["type"] as? Number)?.toInt() ?: return null
-  val connectionId = (stream["streamConnectionID"] as? Number)?.toLong()
-  return AirPlayStream(type, connectionId)
-}
