@@ -3,7 +3,6 @@
 package notch.cat.cast
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,7 +27,6 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.edit
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -51,18 +49,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.databinding.ActivityMainBinding
-import java.net.DatagramPacket
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.MulticastSocket
-import java.net.NetworkInterface
-import java.net.ServerSocket
-import java.net.Socket
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 private fun Context.playerIntent() = Intent(this, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -228,13 +216,9 @@ class PlayerActivity : ComponentActivity() {
   private var mirrorSink: MirrorSink? = null
   private var mirrorJob: Job? = null
   private var connectionRefreshJob: Job? = null
-  private var requestingPermissions = false
-  private var askedWifiPermission = false
-  private var askedNotificationPermission = false
   private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
     refreshConnectionStatus()
     scheduleConnectionRefresh()
-    if (requestingPermissions) advancePermissionFlow() else renderPermissionButton()
   }
   private val playerCommands: (PlaybackCommand) -> Unit = { command ->
     when (command) {
@@ -277,7 +261,7 @@ class PlayerActivity : ComponentActivity() {
     setContentView(binding.root)
     binding.playerView.player = player
     binding.mirrorView.holder.addCallback(mirrorSurface)
-    binding.permissionButton.setOnClickListener { beginPermissionFlow() }
+    binding.permissionButton.setOnClickListener { requestNextPermission() }
 
     player.addListener(object : Player.Listener {
       override fun onPlaybackStateChanged(playbackState: Int) {
@@ -468,9 +452,7 @@ class PlayerActivity : ComponentActivity() {
     mirrorJob?.cancel()
     mirrorJob = null
     mirrorSink = null
-    mirrorDecoder?.let {
-      it.release()
-    }
+    mirrorDecoder?.release()
     mirrorDecoder = null
   }
 
@@ -502,9 +484,9 @@ class PlayerActivity : ComponentActivity() {
 
   private fun transportState() = Runtime.state.value.transportState
   private fun transportState(transport: TransportState) = Runtime.state.update { it.copy(transportState = transport) }
-  private fun volumeText(snapshot: CastSnapshot) = if (snapshot.muted) getString(R.string.volume_muted) else getString(R.string.volume_value, snapshot.volume)
+  private fun volumeText(snapshot: Snapshot) = if (snapshot.muted) getString(R.string.volume_muted) else getString(R.string.volume_value, snapshot.volume)
 
-  private fun renderStatus(snapshot: CastSnapshot) {
+  private fun renderStatus(snapshot: Snapshot) {
     binding.statusState.text = getString(
       when {
         snapshot.lastError.isNotBlank() -> R.string.status_error_state
@@ -521,38 +503,19 @@ class PlayerActivity : ComponentActivity() {
     renderPermissionButton()
   }
 
-  private fun beginPermissionFlow() {
-    requestingPermissions = true
-    askedWifiPermission = false
-    askedNotificationPermission = false
-    advancePermissionFlow()
-  }
-
-  private fun advancePermissionFlow() {
+  private fun requestNextPermission() {
     renderPermissionButton()
     when {
-      !hasWifiNamePermission() && !askedWifiPermission -> {
-        askedWifiPermission = true
-        permissionLauncher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
-      }
-
-      !hasNotificationPermission() && !askedNotificationPermission -> {
-        askedNotificationPermission = true
-        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-      }
+      !hasWifiNamePermission() -> permissionLauncher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
+      !hasNotificationPermission() -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
 
       !hasOverlayPermission() -> {
-        requestingPermissions = false
         runCatching {
           startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         }.onFailure { Log.e(Consts.App.TAG, "open overlay permission settings failed", it) }
       }
 
-      else -> {
-        requestingPermissions = false
-        refreshConnectionStatus()
-        scheduleConnectionRefresh()
-      }
+      else -> refreshConnectionStatus()
     }
   }
 
@@ -623,7 +586,7 @@ class PlayerActivity : ComponentActivity() {
     }
   }
 
-  private fun renderControls(snapshot: CastSnapshot) {
+  private fun renderControls(snapshot: Snapshot) {
     val hasMedia = snapshot.currentUri.isNotBlank()
     val pinned = snapshot.transportState == TransportState.Paused || snapshot.transportState == TransportState.Transitioning || snapshot.muted
     val shouldShow = hasMedia && (pinned || promptText.isNotBlank())
@@ -651,7 +614,7 @@ class PlayerActivity : ComponentActivity() {
     }
   }
 
-  private fun controlText(snapshot: CastSnapshot): String {
+  private fun controlText(snapshot: Snapshot): String {
     val status = getString(snapshot.transportState.text)
     return when {
       !snapshot.muted -> status
@@ -663,7 +626,7 @@ class PlayerActivity : ComponentActivity() {
 
 private fun playbackTime(time: Long): Long = if (time == C.TIME_UNSET || time < 0L) 0L else time
 
-private data class CastSnapshot(
+internal data class Snapshot(
   val uuid: String = "", val ipAddress: String = "0.0.0.0", val httpPort: Int = 0, val wifiName: String = "未获取",
   val serviceRunning: Boolean = false, val multicastLocked: Boolean = false, val currentUri: String = "",
   val transportState: TransportState = TransportState.NoMedia, val lastError: String = "", val positionMs: Long = 0L,
@@ -680,37 +643,8 @@ enum class TransportState(val protocol: String, val text: Int) {
   Transitioning("TRANSITIONING", R.string.player_buffering),
 }
 
-private fun transportInfo(state: CastSnapshot): Map<String, String> = mapOf(
-  "CurrentTransportState" to state.transportState.protocol,
-  "CurrentTransportStatus" to "OK",
-  "CurrentSpeed" to "1",
-)
-
-private fun positionInfo(state: CastSnapshot): Map<String, String> = mapOf(
-  "Track" to if (state.currentUri.isBlank()) "0" else "1",
-  "TrackDuration" to Soap.formatTime(state.durationMs),
-  "TrackMetaData" to "",
-  "TrackURI" to state.currentUri,
-  "RelTime" to Soap.formatTime(state.positionMs),
-  "AbsTime" to Soap.formatTime(state.positionMs),
-  "RelCount" to "2147483647",
-  "AbsCount" to "2147483647",
-)
-
-private fun mediaInfo(state: CastSnapshot): Map<String, String> = mapOf(
-  "NrTracks" to if (state.currentUri.isBlank()) "0" else "1",
-  "MediaDuration" to Soap.formatTime(state.durationMs),
-  "CurrentURI" to state.currentUri,
-  "CurrentURIMetaData" to "",
-  "NextURI" to "",
-  "NextURIMetaData" to "",
-  "PlayMedium" to "NETWORK",
-  "RecordMedium" to "NOT_IMPLEMENTED",
-  "WriteStatus" to "NOT_IMPLEMENTED",
-)
-
-private object Runtime {
-  val state = MutableStateFlow(CastSnapshot())
+internal object Runtime {
+  val state = MutableStateFlow(Snapshot())
 
   fun server(
     running: Boolean,
@@ -736,250 +670,4 @@ private object Runtime {
 
   fun volume(volume: Int) = state.update { it.copy(volume = volume.coerceIn(0, 100)) }
   fun muted(muted: Boolean) = state.update { it.copy(muted = muted) }
-}
-
-private data class DlnaEndpoint(val uuid: String, val ipAddress: String, val httpPort: Int)
-private typealias HttpRequest = Http.Request
-private typealias HttpResponse = Http.Response
-
-private class DlnaRenderer(private val context: Context, private val send: (PlaybackCommand) -> Unit) {
-  private var scope: CoroutineScope? = null
-  private var httpServer: ServerSocket? = null
-  private var ssdpSocket: MulticastSocket? = null
-
-  private lateinit var uuid: String
-  private var ipAddress = "0.0.0.0"
-  private var httpPort = 0
-
-  @SuppressLint("HardwareIds")
-  fun start(parent: CoroutineScope): DlnaEndpoint {
-    if (scope?.isActive == true) return endpoint()
-
-    val preferences = context.getSharedPreferences("notch_cat_cast", Context.MODE_PRIVATE)
-    uuid =
-      preferences.getString("uuid", null) ?: UUID.nameUUIDFromBytes("NotchCatCast:${Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID).orEmpty()}".toByteArray(Charsets.UTF_8))
-        .toString().also { preferences.edit { putString("uuid", it) } }
-    val addresses = NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }.flatMap { it.inetAddresses.toList() }.filterIsInstance<Inet4Address>()
-      .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
-    ipAddress = addresses.firstOrNull { it.isSiteLocalAddress }?.hostAddress ?: addresses.firstOrNull()?.hostAddress ?: "127.0.0.1"
-    val serverSocket = ServerSocket(0)
-    httpServer = serverSocket
-    httpPort = serverSocket.localPort
-
-    val serverScope = CoroutineScope(parent.coroutineContext + SupervisorJob(parent.coroutineContext[Job]))
-    scope = serverScope
-    serverScope.launch { httpLoop(serverSocket, serverScope) }
-    serverScope.launch { ssdpLoop(serverScope) }
-    serverScope.launch {
-      delay(300)
-      while (isActive) {
-        ssdpTargets().forEach { sendNotify(it, "ssdp:alive") }
-        delay(Consts.Dlna.SSDP_ALIVE_INTERVAL_MS)
-      }
-    }
-    return endpoint()
-  }
-
-  fun stop() {
-    val rendererScope = scope ?: return
-    if (::uuid.isInitialized) ssdpTargets().forEach { sendNotify(it, "ssdp:byebye") }
-    scope = null
-    rendererScope.cancel()
-    runCatching { ssdpSocket?.close() }
-    ssdpSocket = null
-    runCatching { httpServer?.close() }
-    httpServer = null
-  }
-
-  private fun endpoint() = DlnaEndpoint(uuid, ipAddress, httpPort)
-
-  private fun httpLoop(serverSocket: ServerSocket, serverScope: CoroutineScope) {
-    while (serverScope.isActive) {
-      val socket = try {
-        serverSocket.accept().apply { soTimeout = Consts.Dlna.SOCKET_TIMEOUT_MS }
-      } catch (error: Exception) {
-        if (serverScope.isActive) Runtime.error("HTTP server accept failed", error)
-        break
-      }
-      serverScope.launch { handleHttp(socket) }
-    }
-  }
-
-  private fun handleHttp(socket: Socket) {
-    socket.use {
-      val request = runCatching { Http.read(it.getInputStream()) }.getOrElse { error ->
-        Runtime.error("HTTP request parse failed", error)
-        return
-      } ?: return
-
-      val route = request.path.substringBefore("?")
-      val action = if (request.method == "POST") Soap.action(request.headers, request.body) else ""
-      val agent = request.headers["user-agent"]?.takeIf { it.isNotBlank() }?.take(Consts.Dlna.MAX_LOG_BODY)
-      Log.i(Consts.App.TAG, "HTTP ${socket.inetAddress.hostAddress} ${request.method} $route${if (action.isBlank()) "" else " action=$action"}${if (agent == null) "" else " ua=$agent"}")
-
-      val isGetLike = request.method == "GET" || request.method == "HEAD"
-      val response = when {
-        isGetLike && (route == "/" || route == "/description.xml") -> HttpResponse.ok(deviceDescription())
-        isGetLike && (route == "/upnp/AVTransport/scpd.xml" || route == "/_urn:schemas-upnp-org:service:AVTransport_scpd.xml") -> HttpResponse.ok(asset("AVTransport.scpd.xml"))
-        isGetLike && (route == "/upnp/RenderingControl/scpd.xml" || route == "/_urn:schemas-upnp-org:service:RenderingControl_scpd.xml") -> HttpResponse.ok(asset("RenderingControl.scpd.xml"))
-        isGetLike && (route == "/upnp/ConnectionManager/scpd.xml" || route == "/_urn:schemas-upnp-org:service:ConnectionManager_scpd.xml") -> HttpResponse.ok(asset("ConnectionManager.scpd.xml"))
-        request.method == "POST" && (route == "/upnp/control/AVTransport" || route == "/_urn:schemas-upnp-org:service:AVTransport_control") -> handleAvTransport(request)
-        request.method == "POST" && (route == "/upnp/control/RenderingControl" || route == "/_urn:schemas-upnp-org:service:RenderingControl_control") -> handleRenderingControl(request)
-        request.method == "POST" && (route == "/upnp/control/ConnectionManager" || route == "/_urn:schemas-upnp-org:service:ConnectionManager_control") -> handleConnectionManager(request)
-        request.method == "SUBSCRIBE" && (route.startsWith("/upnp/event/") || route.endsWith("_event")) -> HttpResponse(
-          200,
-          "OK",
-          "",
-          extraHeaders = mapOf("SID" to "uuid:${UUID.randomUUID()}", "TIMEOUT" to "Second-1800")
-        )
-
-        request.method == "UNSUBSCRIBE" && (route.startsWith("/upnp/event/") || route.endsWith("_event")) -> HttpResponse(statusCode = 200, reason = "OK", body = "")
-        else -> HttpResponse(statusCode = 404, reason = "Not Found", body = "Not Found", contentType = "text/plain; charset=\"utf-8\"")
-      }
-      Log.i(Consts.App.TAG, "HTTP response ${response.statusCode} ${request.method} $route")
-      Http.write(it.getOutputStream(), if (request.method == "HEAD") response.copy(omitBody = true) else response, Consts.Dlna.SERVER_HEADER, httpDate())
-    }
-  }
-
-  private fun ssdpLoop(serverScope: CoroutineScope) {
-    val socket = MulticastSocket(null).apply {
-      reuseAddress = true
-      bind(InetSocketAddress(Consts.Dlna.SSDP_PORT))
-      soTimeout = 0
-    }
-    ssdpSocket = socket
-
-    val group = InetAddress.getByName(Consts.Dlna.SSDP_ADDRESS)
-    val targetAddress = runCatching { InetAddress.getByName(ipAddress) }.getOrNull()
-    val networkInterface = NetworkInterface.getNetworkInterfaces().toList().firstOrNull { candidate -> candidate.inetAddresses.toList().any { it == targetAddress } }
-    runCatching {
-      if (networkInterface != null) {
-        socket.networkInterface = networkInterface
-        socket.joinGroup(InetSocketAddress(group, Consts.Dlna.SSDP_PORT), networkInterface)
-      } else {
-        @Suppress("DEPRECATION") socket.joinGroup(group)
-      }
-    }.onFailure { Runtime.error("Failed to join SSDP multicast group", it) }
-
-    val buffer = ByteArray(8192)
-    while (serverScope.isActive) {
-      val packet = DatagramPacket(buffer, buffer.size)
-      runCatching { socket.receive(packet) }.onSuccess {
-        val message = String(packet.data, packet.offset, packet.length, Charsets.UTF_8)
-        if (message.startsWith("M-SEARCH", ignoreCase = true)) {
-          val headers = Http.parseHeaders(message.lines())
-          if (!headers["man"].orEmpty().contains("ssdp:discover", ignoreCase = true)) return@onSuccess
-          val searchTarget = headers["st"] ?: return@onSuccess
-          Log.i(Consts.App.TAG, "SSDP search from=${packet.address.hostAddress}:${packet.port} st=$searchTarget")
-          val normalizedTarget = searchTarget.trim()
-          ssdpTargets().filter { normalizedTarget.equals("ssdp:all", ignoreCase = true) || it.equals(normalizedTarget, ignoreCase = true) }.forEach { target ->
-            sendUdp(
-              Http.message(
-                "HTTP/1.1 200 OK", "CACHE-CONTROL: max-age=1800", "DATE: ${httpDate()}", "EXT:", "LOCATION: ${locationUrl()}", "SERVER: ${Consts.Dlna.SERVER_HEADER}", "ST: $target", "USN: ${usnFor(target)}"
-              ), packet.address, packet.port, socket
-            )
-          }
-        }
-      }.onFailure {
-        if (serverScope.isActive) Runtime.error("SSDP receive failed", it)
-      }
-    }
-  }
-
-  private fun sendNotify(target: String, nts: String) {
-    val alive = nts == "ssdp:alive"
-    val headers = mutableListOf("NOTIFY * HTTP/1.1", "HOST: ${Consts.Dlna.SSDP_ADDRESS}:${Consts.Dlna.SSDP_PORT}")
-    if (alive) headers += listOf("CACHE-CONTROL: max-age=1800", "LOCATION: ${locationUrl()}", "SERVER: ${Consts.Dlna.SERVER_HEADER}")
-    headers += listOf("NT: $target", "NTS: $nts", "USN: ${usnFor(target)}")
-    sendUdp(Http.message(*headers.toTypedArray()), InetAddress.getByName(Consts.Dlna.SSDP_ADDRESS), Consts.Dlna.SSDP_PORT, ssdpSocket)
-  }
-
-  private fun sendUdp(message: String, address: InetAddress, port: Int, socket: MulticastSocket?) {
-    val bytes = message.toByteArray(Charsets.UTF_8)
-    val packet = DatagramPacket(bytes, bytes.size, address, port)
-    runCatching { socket?.send(packet) ?: MulticastSocket().use { it.send(packet) } }.onFailure { Log.w(Consts.App.TAG, "SSDP send failed: ${it.message}") }
-  }
-
-  private fun handleAvTransport(request: HttpRequest): HttpResponse {
-    val action = runCatching { enumValueOf<AvTransportAction>(Soap.action(request.headers, request.body)) }.getOrNull() ?: return soapFault("AVTransport", 401, "Invalid Action")
-    return when (action) {
-      AvTransportAction.SetAVTransportURI -> setTransportUri(request, action)
-      AvTransportAction.SetNextAVTransportURI, AvTransportAction.SetPlayMode, AvTransportAction.Next, AvTransportAction.Previous -> avOk(action)
-      AvTransportAction.Play -> send(PlaybackCommand.Play).let { avOk(action) }
-      AvTransportAction.Pause -> send(PlaybackCommand.Pause).let { avOk(action) }
-      AvTransportAction.Stop -> send(PlaybackCommand.Stop).let { avOk(action) }
-      AvTransportAction.Seek -> send(PlaybackCommand.Seek(Soap.parseTime(Soap.argument(request.body, "Target")))).let { avOk(action) }
-      AvTransportAction.GetTransportInfo -> avOk(action, transportInfo(Runtime.state.value))
-      AvTransportAction.GetPositionInfo -> avOk(action, positionInfo(Runtime.state.value))
-      AvTransportAction.GetMediaInfo -> avOk(action, mediaInfo(Runtime.state.value))
-      AvTransportAction.GetTransportSettings -> avOk(action, mapOf("PlayMode" to "NORMAL", "RecQualityMode" to "NOT_IMPLEMENTED"))
-      AvTransportAction.GetDeviceCapabilities -> avOk(action, mapOf("PlayMedia" to "NETWORK", "RecMedia" to "", "RecQualityModes" to ""))
-      AvTransportAction.GetCurrentTransportActions -> avOk(action, mapOf("Actions" to "Play,Stop,Pause,Seek"))
-    }
-  }
-
-  private enum class AvTransportAction {
-    SetAVTransportURI, SetNextAVTransportURI, SetPlayMode, Next, Previous, Play, Pause, Stop, Seek, GetTransportInfo, GetPositionInfo, GetMediaInfo, GetTransportSettings, GetDeviceCapabilities, GetCurrentTransportActions,
-  }
-
-  private fun setTransportUri(request: HttpRequest, action: AvTransportAction): HttpResponse {
-    val uri = Soap.argument(request.body, "CurrentURI")
-    if (uri.isBlank()) return soapFault("AVTransport", 714, "Illegal MIME-type")
-    Log.i(Consts.App.TAG, "SetAVTransportURI host=${runCatching { Uri.parse(uri).host.orEmpty() }.getOrDefault("")} uri=$uri")
-    return send(PlaybackCommand.Load(uri, play = false)).let { avOk(action) }
-  }
-
-  private fun avOk(action: AvTransportAction, arguments: Map<String, String> = emptyMap()) = soapOk("AVTransport", action.name, arguments)
-
-  private fun handleRenderingControl(request: HttpRequest) = when (val action = Soap.action(request.headers, request.body)) {
-    "GetVolume" -> soapOk("RenderingControl", action, mapOf("CurrentVolume" to Runtime.state.value.volume.toString()))
-    "SetVolume" -> Runtime.volume(Soap.argument(request.body, "DesiredVolume").toIntOrNull() ?: Runtime.state.value.volume).let { soapOk("RenderingControl", action) }
-    "GetMute" -> soapOk("RenderingControl", action, mapOf("CurrentMute" to if (Runtime.state.value.muted) "1" else "0"))
-    "SetMute" -> Runtime.muted(Soap.argument(request.body, "DesiredMute").let { it == "1" || it.equals("true", ignoreCase = true) }).let { soapOk("RenderingControl", action) }
-    else -> soapFault("RenderingControl", 401, "Invalid Action")
-  }
-
-  private fun handleConnectionManager(request: HttpRequest) = when (val action = Soap.action(request.headers, request.body)) {
-    "GetProtocolInfo" -> soapOk("ConnectionManager", action, mapOf("Source" to "", "Sink" to Consts.Dlna.SINK_PROTOCOL_INFO))
-    "GetCurrentConnectionIDs" -> soapOk("ConnectionManager", action, mapOf("ConnectionIDs" to "0"))
-    "GetCurrentConnectionInfo" -> soapOk(
-      "ConnectionManager",
-      action,
-      mapOf("RcsID" to "0", "AVTransportID" to "0", "ProtocolInfo" to Consts.Dlna.SINK_PROTOCOL_INFO, "PeerConnectionManager" to "", "PeerConnectionID" to "-1", "Direction" to "Input", "Status" to "OK")
-    )
-
-    else -> soapFault("ConnectionManager", 401, "Invalid Action")
-  }
-
-  private fun soapOk(service: String, action: String, arguments: Map<String, String> = emptyMap()) =
-    HttpResponse.ok(Soap.ok(service, action, arguments))
-
-  private fun soapFault(service: String, code: Int, description: String) = HttpResponse(
-    statusCode = 500,
-    reason = "Internal Server Error",
-    body = Soap.faultBody(code, description)
-  ).also { Log.w(Consts.App.TAG, "SOAP fault service=$service code=$code description=$description") }
-
-  private fun deviceDescription() =
-    """<?xml version="1.0" encoding="utf-8"?><root xmlns="urn:schemas-upnp-org:device-1-0"><specVersion><major>1</major><minor>0</minor></specVersion><URLBase>http://$ipAddress:$httpPort</URLBase><device><deviceType>${Consts.Dlna.MEDIA_RENDERER}</deviceType><presentationURL>/</presentationURL><friendlyName>${
-      context.getString(R.string.application_name).escapeXml()
-    }</friendlyName><manufacturer>Microsoft Corporation</manufacturer><manufacturerURL>http://www.microsoft.com</manufacturerURL><modelDescription>Media Renderer</modelDescription><modelName>Windows Media Player</modelName><modelURL>http://go.microsoft.com/fwlink/Linkld=105927</modelURL><dlna:X_DLNADOC xmlns:dlna="urn:schemas-dlna-org:device-1-0">DMR-1.50</dlna:X_DLNADOC><UDN>uuid:$uuid</UDN><serviceList>${
-      serviceXml(
-        Consts.Dlna.AV_TRANSPORT, "AVTransport"
-      )
-    }${serviceXml(Consts.Dlna.CONNECTION_MANAGER, "ConnectionManager")}${serviceXml(Consts.Dlna.RENDERING_CONTROL, "RenderingControl")}</serviceList></device></root>"""
-
-  private fun serviceXml(type: String, name: String) =
-    """<service><serviceType>$type</serviceType><serviceId>urn:upnp-org:serviceId:$name</serviceId><SCPDURL>_urn:schemas-upnp-org:service:${name}_scpd.xml</SCPDURL><controlURL>_urn:schemas-upnp-org:service:${name}_control</controlURL><eventSubURL>_urn:schemas-upnp-org:service:${name}_event</eventSubURL></service>"""
-
-  private fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
-
-  private fun ssdpTargets(): List<String> = listOf("upnp:rootdevice", "uuid:$uuid", Consts.Dlna.MEDIA_RENDERER, Consts.Dlna.AV_TRANSPORT, Consts.Dlna.CONNECTION_MANAGER, Consts.Dlna.RENDERING_CONTROL)
-  private fun usnFor(target: String) = when (target) {
-    "uuid:$uuid" -> "uuid:$uuid"
-    "upnp:rootdevice" -> "uuid:$uuid::upnp:rootdevice"
-    else -> "uuid:$uuid::$target"
-  }
-
-  private fun locationUrl(): String = "http://$ipAddress:$httpPort/description.xml"
 }
