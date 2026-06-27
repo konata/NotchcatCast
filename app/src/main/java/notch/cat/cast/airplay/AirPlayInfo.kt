@@ -19,40 +19,48 @@ internal object AirPlayInfo {
   ): ByteArray {
     val bplist = headers["content-type"]?.contains(BPLIST, ignoreCase = true) == true
     val queryQualifiers = path.substringAfter("?", "").split("?").filter { it.isNotBlank() }.toSet()
-    if (bplist || queryQualifiers.isNotEmpty()) {
-      val qualifiers = if (bplist) qualifiers(body) else queryQualifiers
+    if (bplist) {
       return BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
-        if ("txtAirPlay" in qualifiers) put("txtAirPlay", NSData(AirPlayTxt.bytes(AirPlayTxt.airplay(deviceId, uuid, publicKeyHex))))
-        if ("txtRAOP" in qualifiers) put("txtRAOP", NSData(AirPlayTxt.bytes(AirPlayTxt.raop(publicKeyHex))))
+        putTxtRecords(qualifiers(body), deviceId, uuid, publicKeyHex)
+      })
+    }
+    if (queryQualifiers.isNotEmpty()) {
+      return BinaryPropertyListWriter.writeToArray(info(name, uuid, deviceId, publicKey, full = false).apply {
+        putTxtRecords(queryQualifiers, deviceId, uuid, publicKeyHex)
       })
     }
     return plist(name, uuid, deviceId, publicKey)
   }
 
   fun plist(name: String, uuid: String, deviceId: String, publicKey: ByteArray) =
-    BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
-      put("audioFormats", NSArray(
-        NSDictionary().apply { put("type", 100); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
-        NSDictionary().apply { put("type", 101); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
-      ))
-      put("audioLatencies", NSArray(
-        NSDictionary().apply { put("type", 100); put("audioType", "default"); put("inputLatencyMicros", false) },
-        NSDictionary().apply { put("type", 101); put("audioType", "default"); put("inputLatencyMicros", false) },
-      ))
-      put("displays", NSArray(NSDictionary().apply {
-        put("features", 14)
-        put("height", 1080)
-        put("heightPixels", 1080)
-        put("heightPhysical", false)
-        put("width", 1920)
-        put("widthPixels", 1920)
-        put("widthPhysical", false)
-        put("maxFPS", 60)
-        put("overscanned", false)
-        put("refreshRate", 60)
-        put("rotation", false)
-        put("uuid", uuid)
-      }))
+    BinaryPropertyListWriter.writeToArray(info(name, uuid, deviceId, publicKey, full = true))
+
+  private fun info(name: String, uuid: String, deviceId: String, publicKey: ByteArray, full: Boolean) =
+    NSDictionary().apply {
+      if (full) {
+        put("audioFormats", NSArray(
+          NSDictionary().apply { put("type", 100); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
+          NSDictionary().apply { put("type", 101); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
+        ))
+        put("audioLatencies", NSArray(
+          NSDictionary().apply { put("type", 100); put("audioType", "default"); put("inputLatencyMicros", false) },
+          NSDictionary().apply { put("type", 101); put("audioType", "default"); put("inputLatencyMicros", false) },
+        ))
+        put("displays", NSArray(NSDictionary().apply {
+          put("features", 14)
+          put("height", 1080)
+          put("heightPixels", 1080)
+          put("heightPhysical", false)
+          put("width", 1920)
+          put("widthPixels", 1920)
+          put("widthPhysical", false)
+          put("maxFPS", 60)
+          put("overscanned", false)
+          put("refreshRate", 60)
+          put("rotation", false)
+          put("uuid", uuid)
+        }))
+      }
       put("deviceID", deviceId)
       put("features", AirPlayProfile.FEATURES)
       put("keepAliveLowPower", 1)
@@ -65,7 +73,12 @@ internal object AirPlayInfo {
       put("sourceVersion", AirPlayProfile.SOURCE_VERSION)
       put("statusFlags", 68)
       put("vv", 2)
-    })
+    }
+
+  private fun NSDictionary.putTxtRecords(qualifiers: Set<String>, deviceId: String, uuid: String, publicKeyHex: String) {
+    if ("txtAirPlay" in qualifiers) put("txtAirPlay", NSData(AirPlayTxt.bytes(AirPlayTxt.airplay(deviceId, uuid, publicKeyHex))))
+    if ("txtRAOP" in qualifiers) put("txtRAOP", NSData(AirPlayTxt.bytes(AirPlayTxt.raop(publicKeyHex))))
+  }
 
   private fun qualifiers(body: ByteArray) = runCatching {
     val dict = BinaryPropertyListParser.parse(body) as? NSDictionary ?: return@runCatching emptySet()

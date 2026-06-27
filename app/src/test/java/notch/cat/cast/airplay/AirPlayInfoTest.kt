@@ -7,6 +7,7 @@ import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class AirPlayInfoTest {
@@ -93,9 +94,15 @@ class AirPlayInfoTest {
       publicKeyHex = publicKeyHex
     ).dict()
 
-    assertEquals(listOf("txtAirPlay", "txtRAOP"), info.allKeys().sorted())
+    assertEquals("62:6D:04:15:E7:2F", info.string("deviceID"))
+    assertEquals("62:6D:04:15:E7:2F", info.string("macAddress"))
+    assertEquals("莽莽投屏", info.string("name"))
+    assertEquals(AirPlayProfile.FEATURES, info.long("features"))
+    assertArrayEquals(publicKey, info.data("pk"))
     assertEquals(AirPlayProfile.FEATURES_HEX, txtRecord(info.data("txtAirPlay"))["features"])
     assertEquals(AirPlayProfile.FEATURES_HEX, txtRecord(info.data("txtRAOP"))["ft"])
+    assertFalse(info.containsKey("displays"))
+    assertFalse(info.containsKey("audioFormats"))
   }
 
   @Test
