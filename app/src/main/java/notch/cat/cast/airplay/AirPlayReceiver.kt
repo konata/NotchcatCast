@@ -3,9 +3,6 @@ package notch.cat.cast.airplay
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.dd.plist.BinaryPropertyListWriter
-import com.dd.plist.NSArray
-import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 import com.dd.plist.PropertyListParser
 import kotlinx.coroutines.CoroutineScope
@@ -111,7 +108,12 @@ class AirPlayReceiver(
     val path = request.path.substringBefore("?")
     val isGet = request.method == "GET" || request.method == "HEAD"
     return when {
-      isGet && path == "/info" -> RtspResponse.ok(infoPlist(), BPLIST)
+      isGet && path == "/info" -> RtspResponse.ok(AirPlayInfo.plist(
+        name = context.getString(R.string.application_name),
+        uuid = uuid,
+        deviceId = AirPlayDiscovery.deviceId(uuid),
+        publicKey = session.publicKey
+      ), BPLIST)
       isGet && path == "/server-info" -> RtspResponse.ok(AirPlayServerInfo.xml(AirPlayDiscovery.deviceId(uuid)), XML_PLIST)
       isGet && path == "/playback-info" -> RtspResponse.ok(playbackInfoPlist(), XML_PLIST)
       isGet && path == "/scrub" -> RtspResponse.ok("duration: 0.0\nposition: 0.0\n".toByteArray(), "text/parameters")
@@ -234,40 +236,6 @@ class AirPlayReceiver(
     return AirPlaySetup.responseAudio(type, data.localPort, control.localPort)
   }
 
-  private fun infoPlist() = plist {
-    put("audioFormats", NSArray(
-      NSDictionary().apply { put("type", 100); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
-      NSDictionary().apply { put("type", 101); put("audioInputFormats", 67108860); put("audioOutputFormats", 67108860) },
-    ))
-    put("audioLatencies", NSArray(
-      NSDictionary().apply { put("type", 100); put("audioType", "default"); put("inputLatencyMicros", false) },
-      NSDictionary().apply { put("type", 101); put("audioType", "default"); put("inputLatencyMicros", false) },
-    ))
-    put("displays", NSArray(NSDictionary().apply {
-      put("features", 14)
-      put("height", 1080)
-      put("heightPixels", 1080)
-      put("heightPhysical", false)
-      put("width", 1920)
-      put("widthPixels", 1920)
-      put("widthPhysical", false)
-      put("maxFPS", 60)
-      put("overscanned", false)
-      put("refreshRate", 60)
-      put("rotation", false)
-      put("uuid", uuid)
-    }))
-    put("features", AirPlayProfile.FEATURES)
-    put("keepAliveSendStatsAsBody", 1)
-    put("model", AirPlayProfile.MODEL)
-    put("name", context.getString(R.string.application_name))
-    put("pi", uuid)
-    put("pk", NSData(session.publicKey))
-    put("sourceVersion", AirPlayProfile.SOURCE_VERSION)
-    put("statusFlags", AirPlayProfile.FLAGS)
-    put("vv", 2)
-  }
-
   private fun playbackInfoPlist() = xmlPlist(
     """
     <key>duration</key><real>0</real>
@@ -288,7 +256,6 @@ class AirPlayReceiver(
     }.toMap()
   }
 
-  private fun plist(block: NSDictionary.() -> Unit): ByteArray = BinaryPropertyListWriter.writeToArray(NSDictionary().apply(block))
   private fun xmlPlist(body: String) =
     """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>$body</dict></plist>""".toByteArray(Charsets.UTF_8)
 
