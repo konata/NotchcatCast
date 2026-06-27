@@ -16,7 +16,6 @@ import notch.cat.cast.R
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.DatagramSocket
 
 private typealias RtspRequest = AirPlayRtsp.Request
 private typealias RtspResponse = AirPlayRtsp.Response
@@ -30,8 +29,7 @@ class AirPlayReceiver(
   private var scope: CoroutineScope? = null
   private var server: ServerSocket? = null
   private var videoServer: ServerSocket? = null
-  private var audioDataSocket: DatagramSocket? = null
-  private var audioControlSocket: DatagramSocket? = null
+  private var audio: AirPlayAudio? = null
   private var discovery: AirPlayDiscovery? = null
   private var timing: AirPlayTiming? = null
   private val session = AirPlaySession(publicKeySeed)
@@ -46,6 +44,7 @@ class AirPlayReceiver(
     val activeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     scope = activeScope
     timing = AirPlayTiming(activeScope)
+    audio = AirPlayAudio(activeScope)
     activeScope.launch { controlLoop(socket, activeScope) }
     discovery = AirPlayDiscovery(context, uuid, session.publicKeyHex).also { it.register(socket.localPort) }
     return socket.localPort
@@ -63,8 +62,7 @@ class AirPlayReceiver(
     timing?.stop()
     server = null
     videoServer = null
-    audioDataSocket = null
-    audioControlSocket = null
+    audio = null
     timing = null
     AirPlayMirrorBus.stop()
   }
@@ -190,10 +188,10 @@ class AirPlayReceiver(
   }
 
   private fun closeAudio() {
-    runCatching { audioDataSocket?.close() }
-    runCatching { audioControlSocket?.close() }
-    audioDataSocket = null
-    audioControlSocket = null
+    audio?.stats()?.takeIf { it.dataPackets > 0 || it.controlPackets > 0 }?.let {
+      Log.i(TAG, "AirPlay audio stopped data=${it.dataPackets} control=${it.controlPackets}")
+    }
+    audio?.stop()
   }
 
   private fun startVideoServer(): Int {
@@ -261,9 +259,7 @@ class AirPlayReceiver(
   }
 
   private fun audioSetupPort(type: Int): AirPlayStreamPort {
-    val data = audioDataSocket ?: DatagramSocket(0).also { audioDataSocket = it }
-    val control = audioControlSocket ?: DatagramSocket(0).also { audioControlSocket = it }
-    return AirPlayStreamPort(type, data.localPort, control.localPort)
+    return (audio ?: error("AirPlay audio unavailable")).setup(type)
   }
 
   private fun playbackInfoPlist() = xmlPlist(
