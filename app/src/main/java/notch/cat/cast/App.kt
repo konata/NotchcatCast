@@ -187,7 +187,10 @@ class ReceiverService : Service() {
   }
 
   private fun startReceivers() {
-    if (dlna != null) return
+    if (dlna != null) {
+      Runtime.server(running = true, wifiName = applicationContext.wifiName(), multicastLocked = multicastLock?.isHeld == true)
+      return
+    }
     multicastLock = applicationContext.getSystemService(WifiManager::class.java)?.createMulticastLock("NotchCatCastDlnaMulticast")?.apply {
       setReferenceCounted(false)
       acquire()
@@ -224,11 +227,13 @@ class PlayerActivity : ComponentActivity() {
   private var mirrorDecoder: MirrorDecoder? = null
   private var mirrorSink: MirrorSink? = null
   private var mirrorJob: Job? = null
+  private var connectionRefreshJob: Job? = null
   private var requestingPermissions = false
   private var askedWifiPermission = false
   private var askedNotificationPermission = false
   private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-    Runtime.wifi(applicationContext.wifiName())
+    refreshConnectionStatus()
+    scheduleConnectionRefresh()
     if (requestingPermissions) advancePermissionFlow() else renderPermissionButton()
   }
   private val playerCommands: (PlaybackCommand) -> Unit = { command ->
@@ -349,8 +354,9 @@ class PlayerActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
-    Runtime.wifi(applicationContext.wifiName())
-    renderPermissionButton()
+    applicationContext.startReceiver()
+    refreshConnectionStatus()
+    scheduleConnectionRefresh()
   }
 
   override fun onStop() {
@@ -373,9 +379,12 @@ class PlayerActivity : ComponentActivity() {
     binding.controlBar.animate().cancel()
     playerScope?.cancel()
     playerScope = null
+    connectionRefreshJob?.cancel()
+    connectionRefreshJob = null
   }
 
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (::binding.isInitialized && binding.permissionButton.isFocused) return super.dispatchKeyEvent(event)
     val down = event.action == KeyEvent.ACTION_DOWN
     when (event.keyCode) {
       KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> if (down) seekBy(-10_000L, getString(R.string.seek_back_10s))
@@ -504,7 +513,7 @@ class PlayerActivity : ComponentActivity() {
       }
     )
     binding.statusWifiValue.text = snapshot.wifiName
-    binding.statusAddressValue.text = "${snapshot.ipAddress}:${snapshot.httpPort}".takeUnless { snapshot.httpPort == 0 } ?: "-"
+    binding.statusAddressValue.text = snapshot.ipAddress.takeUnless { it == "0.0.0.0" } ?: "-"
     binding.statusServiceValue.text = getString(if (snapshot.serviceRunning) R.string.status_running else R.string.status_stopped)
     binding.statusMulticastValue.text = getString(if (snapshot.multicastLocked) R.string.status_locked else R.string.status_unlocked)
     binding.statusError.isVisible = snapshot.lastError.isNotBlank()
@@ -541,14 +550,32 @@ class PlayerActivity : ComponentActivity() {
 
       else -> {
         requestingPermissions = false
-        Runtime.wifi(applicationContext.wifiName())
-        renderPermissionButton()
+        refreshConnectionStatus()
+        scheduleConnectionRefresh()
       }
     }
   }
 
+  private fun scheduleConnectionRefresh() {
+    connectionRefreshJob?.cancel()
+    connectionRefreshJob = lifecycleScope.launch {
+      delay(350L)
+      refreshConnectionStatus()
+      delay(900L)
+      refreshConnectionStatus()
+    }
+  }
+
+  private fun refreshConnectionStatus() {
+    Runtime.wifi(applicationContext.wifiName())
+    if (Runtime.state.value.currentUri.isBlank()) renderStatus(Runtime.state.value) else renderPermissionButton()
+  }
+
   private fun renderPermissionButton() {
-    binding.permissionButton.isVisible = !hasSetupPermissions()
+    val visible = !hasSetupPermissions()
+    binding.permissionRow.isVisible = visible
+    binding.statusState.isVisible = !visible
+    if (visible && !binding.permissionButton.isFocused) binding.permissionButton.requestFocus()
   }
 
   private fun clearPlayback(clearError: Boolean = true) {

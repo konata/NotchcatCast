@@ -39,48 +39,102 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="64dp"
-        android:paddingVertical="72dp">
+        android:paddingVertical="56dp">
 
         <LinearLayout
             android:id="@+id/landing_hero"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="52dp"
-            android:layout_weight="1"
+            android:layout_weight="6"
             android:orientation="vertical">
 
-            <ImageView
-                android:id="@+id/status_icon"
-                android:layout_width="152dp"
-                android:layout_height="152dp"
-                android:background="@drawable/icon_background"
-                android:contentDescription="@string/application_name"
-                android:padding="16dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_cat_foreground" />
-
-            <TextView
-                android:id="@+id/status_title"
+            <LinearLayout
+                android:id="@+id/brand_row"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="30dp"
-                android:text="@string/application_name"
-                android:textColor="#FFF8F1"
-                android:textSize="50sp"
-                android:textStyle="bold" />
+                android:baselineAligned="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/status_state"
-                android:layout_width="wrap_content"
-                android:layout_height="38dp"
-                android:layout_marginTop="32dp"
-                android:background="@drawable/status_pill"
-                android:gravity="center"
-                android:minWidth="138dp"
-                android:paddingHorizontal="22dp"
-                android:textColor="#FFF8F1"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                <ImageView
+                    android:id="@+id/status_icon"
+                    android:layout_width="136dp"
+                    android:layout_height="136dp"
+                    android:background="@drawable/icon_background"
+                    android:contentDescription="@string/application_name"
+                    android:padding="14dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_cat_foreground" />
+
+                <LinearLayout
+                    android:id="@+id/brand_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="34dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/status_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/application_name"
+                        android:textColor="#FFF8F1"
+                        android:textSize="46sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/status_state"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="22dp"
+                        android:background="@drawable/status_pill"
+                        android:gravity="center"
+                        android:minWidth="138dp"
+                        android:paddingHorizontal="22dp"
+                        android:textColor="#FFF8F1"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/permission_row"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="44dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/permission_button"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="3"
+                    android:background="@drawable/permission_button"
+                    android:clickable="true"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:ellipsize="end"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:nextFocusDown="@id/permission_button"
+                    android:nextFocusLeft="@id/permission_button"
+                    android:nextFocusRight="@id/permission_button"
+                    android:nextFocusUp="@id/permission_button"
+                    android:paddingHorizontal="26dp"
+                    android:text="@string/permission_button_text"
+                    android:textColor="@android:color/white"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="2" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/landing_caption"
@@ -93,37 +147,17 @@
                 android:textColor="#99E7DDD1"
                 android:textSize="18sp" />
 
-            <TextView
-                android:id="@+id/permission_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:background="@drawable/permission_button"
-                android:clickable="true"
-                android:ellipsize="end"
-                android:focusable="true"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:lineSpacingExtra="2dp"
-                android:maxLines="2"
-                android:minHeight="62dp"
-                android:paddingHorizontal="18dp"
-                android:paddingVertical="10dp"
-                android:text="@string/permission_button_text"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/status_panel"
-            android:layout_width="420dp"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="4"
             android:background="@drawable/status_panel"
             android:orientation="vertical"
-            android:paddingHorizontal="30dp"
-            android:paddingVertical="28dp">
+            android:paddingHorizontal="26dp"
+            android:paddingVertical="24dp">
 
             <TextView
                 android:id="@+id/status_panel_title"
@@ -147,7 +181,7 @@
                 android:id="@+id/status_grid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
+                android:layout_marginTop="22dp"
                 android:orientation="vertical">
 
                 <LinearLayout style="@style/StatusRow">

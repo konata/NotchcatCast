@@ -2,6 +2,7 @@ package notch.cat.cast
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
@@ -19,8 +20,16 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 
-internal fun Context.hasWifiNamePermission() = checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
-internal fun Context.hasNotificationPermission() = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+@Suppress("DEPRECATION")
+private fun Context.hasRuntimePermission(permission: String): Boolean {
+  if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) return false
+  val op = AppOpsManager.permissionToOp(permission) ?: return true
+  val mode = getSystemService(AppOpsManager::class.java)?.unsafeCheckOpNoThrow(op, applicationInfo.uid, packageName) ?: AppOpsManager.MODE_ALLOWED
+  return mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_FOREGROUND
+}
+
+internal fun Context.hasWifiNamePermission() = hasRuntimePermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+internal fun Context.hasNotificationPermission() = hasRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
 internal fun Context.hasOverlayPermission() = Settings.canDrawOverlays(this)
 internal fun Context.hasSetupPermissions() = hasWifiNamePermission() && hasNotificationPermission() && hasOverlayPermission()
 internal fun Context.cancelOpenPlayerNotification() = getSystemService(NotificationManager::class.java)?.cancel(Consts.App.OPEN_PLAYER_NOTIFICATION_ID)

@@ -31,5 +31,5 @@
     <string name="notification_open_title">收到投屏请求</string>
     <string name="notification_open_text">点击打开播放器继续播放</string>
     <string name="notification_open_channel">投屏提醒</string>
-    <string name="permission_button_text">启用完整投屏体验\n允许自动打开播放器、投屏提醒和 Wi-Fi 显示</string>
+    <string name="permission_button_text">启用完整投屏体验</string>
 </resources>
