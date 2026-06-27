@@ -435,7 +435,7 @@ class IndexActivity : ComponentActivity() {
   private fun seek(positionMs: Long) = onSurface {
     val target = positionMs.coerceAtLeast(0L)
     player.seekTo(target)
-    prompt(getString(R.string.seek_to, formatTime(target)))
+    prompt(getString(R.string.seek_to, DlnaSoap.formatTime(target)))
   }
 
   private fun onSurface(block: suspend () -> Unit) {
@@ -535,7 +535,7 @@ class IndexActivity : ComponentActivity() {
     val target = if (duration > 0L) (player.currentPosition + deltaMs).coerceIn(0L, duration) else (player.currentPosition + deltaMs).coerceAtLeast(0L)
     player.seekTo(target)
     StateStore.setPlayerPosition(target, duration)
-    prompt(getString(R.string.seek_with_time, label, formatTime(target)))
+    prompt(getString(R.string.seek_with_time, label, DlnaSoap.formatTime(target)))
   }
 
   private fun prompt(message: String) {
@@ -565,7 +565,7 @@ class IndexActivity : ComponentActivity() {
     binding.controlBar.visibility = View.VISIBLE
     binding.controlBar.alpha = if (pinned) 0.92f else 0.82f
     binding.controlStateText.text = transientControlText.ifBlank { controlText(snapshot) }
-    binding.controlTimeText.text = "${formatTime(snapshot.positionMs)} / ${if (snapshot.durationMs > 0L) formatTime(snapshot.durationMs) else "--:--"}"
+    binding.controlTimeText.text = "${DlnaSoap.formatTime(snapshot.positionMs)} / ${if (snapshot.durationMs > 0L) DlnaSoap.formatTime(snapshot.durationMs) else "--:--"}"
 
     if (snapshot.transportState == TransportState.Transitioning && snapshot.durationMs <= 0L) {
       binding.controlProgress.isIndeterminate = true
@@ -626,18 +626,18 @@ private fun transportInfo(state: CastState): Map<String, String> = mapOf(
 
 private fun positionInfo(state: CastState): Map<String, String> = mapOf(
   "Track" to if (state.currentUri.isBlank()) "0" else "1",
-  "TrackDuration" to formatTime(state.durationMs),
+  "TrackDuration" to DlnaSoap.formatTime(state.durationMs),
   "TrackMetaData" to "",
   "TrackURI" to state.currentUri,
-  "RelTime" to formatTime(state.positionMs),
-  "AbsTime" to formatTime(state.positionMs),
+  "RelTime" to DlnaSoap.formatTime(state.positionMs),
+  "AbsTime" to DlnaSoap.formatTime(state.positionMs),
   "RelCount" to "2147483647",
   "AbsCount" to "2147483647",
 )
 
 private fun mediaInfo(state: CastState): Map<String, String> = mapOf(
   "NrTracks" to if (state.currentUri.isBlank()) "0" else "1",
-  "MediaDuration" to formatTime(state.durationMs),
+  "MediaDuration" to DlnaSoap.formatTime(state.durationMs),
   "CurrentURI" to state.currentUri,
   "CurrentURIMetaData" to "",
   "NextURI" to "",
@@ -675,14 +675,6 @@ private object StateStore {
   fun setVolume(volume: Int) = state.update { it.copy(volume = volume.coerceIn(0, 100)) }
   fun setMuted(muted: Boolean) = state.update { it.copy(muted = muted) }
 }
-
-private fun formatTime(milliseconds: Long): String {
-  val s = milliseconds.coerceAtLeast(0L) / 1000L
-  return String.format(Locale.US, "%d:%02d:%02d", s / 3600L, s % 3600L / 60L, s % 60L)
-}
-
-fun String.escapeXml(): String = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
-fun String.unescapeXml(): String = this.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 
 private data class DmrInfo(val uuid: String, val ipAddress: String, val httpPort: Int)
 
@@ -757,7 +749,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
       } ?: return
 
       val route = request.path.substringBefore("?")
-      val action = if (request.method == "POST") soapAction(request) else ""
+      val action = if (request.method == "POST") DlnaSoap.action(request.headers, request.body) else ""
       val ua = request.headers["user-agent"]?.takeIf { it.isNotBlank() }?.take(MAX_LOG_BODY)
       Log.i(TAG, "HTTP ${socket.inetAddress.hostAddress} ${request.method} $route${if (action.isBlank()) "" else " action=$action"}${if (ua == null) "" else " ua=$ua"}")
 
@@ -847,14 +839,14 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
   private fun udpMessage(vararg lines: String) = lines.joinToString("\r\n", postfix = "\r\n\r\n")
 
   private fun handleAvTransport(request: HttpRequest): HttpResponse {
-    val action = runCatching { enumValueOf<AvTransportAction>(soapAction(request)) }.getOrNull() ?: return soapFault("AVTransport", 401, "Invalid Action")
+    val action = runCatching { enumValueOf<AvTransportAction>(DlnaSoap.action(request.headers, request.body)) }.getOrNull() ?: return soapFault("AVTransport", 401, "Invalid Action")
     return when (action) {
       AvTransportAction.SetAVTransportURI -> setTransportUri(request, action)
       AvTransportAction.SetNextAVTransportURI, AvTransportAction.SetPlayMode, AvTransportAction.Next, AvTransportAction.Previous -> avOk(action)
       AvTransportAction.Play -> send(CastCommand.Play).let { avOk(action) }
       AvTransportAction.Pause -> send(CastCommand.Pause).let { avOk(action) }
       AvTransportAction.Stop -> send(CastCommand.Stop).let { avOk(action) }
-      AvTransportAction.Seek -> send(CastCommand.Seek(parseTime(soapArg(request.body, "Target")))).let { avOk(action) }
+      AvTransportAction.Seek -> send(CastCommand.Seek(DlnaSoap.parseTime(DlnaSoap.arg(request.body, "Target")))).let { avOk(action) }
       AvTransportAction.GetTransportInfo -> avOk(action, transportInfo(StateStore.state.value))
       AvTransportAction.GetPositionInfo -> avOk(action, positionInfo(StateStore.state.value))
       AvTransportAction.GetMediaInfo -> avOk(action, mediaInfo(StateStore.state.value))
@@ -869,7 +861,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
   }
 
   private fun setTransportUri(request: HttpRequest, action: AvTransportAction): HttpResponse {
-    val uri = soapArg(request.body, "CurrentURI")
+    val uri = DlnaSoap.arg(request.body, "CurrentURI")
     if (uri.isBlank()) return soapFault("AVTransport", 714, "Illegal MIME-type")
     Log.i(TAG, "SetAVTransportURI host=${runCatching { Uri.parse(uri).host.orEmpty() }.getOrDefault("")} uri=$uri")
     return send(CastCommand.Load(uri, play = false)).let { avOk(action) }
@@ -877,15 +869,15 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
   private fun avOk(action: AvTransportAction, values: Map<String, String> = emptyMap()) = soapOk("AVTransport", action.name, values)
 
-  private fun handleRenderingControl(request: HttpRequest) = when (val action = soapAction(request)) {
+  private fun handleRenderingControl(request: HttpRequest) = when (val action = DlnaSoap.action(request.headers, request.body)) {
     "GetVolume" -> soapOk("RenderingControl", action, mapOf("CurrentVolume" to StateStore.state.value.volume.toString()))
-    "SetVolume" -> StateStore.setVolume(soapArg(request.body, "DesiredVolume").toIntOrNull() ?: StateStore.state.value.volume).let { soapOk("RenderingControl", action) }
+    "SetVolume" -> StateStore.setVolume(DlnaSoap.arg(request.body, "DesiredVolume").toIntOrNull() ?: StateStore.state.value.volume).let { soapOk("RenderingControl", action) }
     "GetMute" -> soapOk("RenderingControl", action, mapOf("CurrentMute" to if (StateStore.state.value.muted) "1" else "0"))
-    "SetMute" -> StateStore.setMuted(soapArg(request.body, "DesiredMute") == "1" || soapArg(request.body, "DesiredMute").equals("true", ignoreCase = true)).let { soapOk("RenderingControl", action) }
+    "SetMute" -> StateStore.setMuted(DlnaSoap.arg(request.body, "DesiredMute").let { it == "1" || it.equals("true", ignoreCase = true) }).let { soapOk("RenderingControl", action) }
     else -> soapFault("RenderingControl", 401, "Invalid Action")
   }
 
-  private fun handleConnectionManager(request: HttpRequest) = when (val action = soapAction(request)) {
+  private fun handleConnectionManager(request: HttpRequest) = when (val action = DlnaSoap.action(request.headers, request.body)) {
     "GetProtocolInfo" -> soapOk("ConnectionManager", action, mapOf("Source" to "", "Sink" to SINK_PROTOCOL_INFO))
     "GetCurrentConnectionIDs" -> soapOk("ConnectionManager", action, mapOf("ConnectionIDs" to "0"))
     "GetCurrentConnectionInfo" -> soapOk(
@@ -898,22 +890,17 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
   }
 
   private fun soapOk(service: String, action: String, values: Map<String, String> = emptyMap()) =
-    HttpResponse.ok(
-      """<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action}Response xmlns:u="urn:schemas-upnp-org:service:$service:1">${
-        values.entries.joinToString(
-          separator = ""
-        ) { (key, value) -> "<$key>${value.escapeXml()}</$key>" }
-      }</u:${action}Response></s:Body></s:Envelope>""")
+    HttpResponse.ok(DlnaSoap.ok(service, action, values))
 
   private fun soapFault(service: String, code: Int, description: String) = HttpResponse(
     statusCode = 500,
     reason = "Internal Server Error",
-    body = """<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>$code</errorCode><errorDescription>${description.escapeXml()}</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>"""
+    body = DlnaSoap.faultBody(code, description)
   ).also { Log.w(TAG, "SOAP fault service=$service code=$code description=$description") }
 
   private fun deviceDescription() =
     """<?xml version="1.0" encoding="utf-8"?><root xmlns="urn:schemas-upnp-org:device-1-0"><specVersion><major>1</major><minor>0</minor></specVersion><URLBase>http://$ipAddress:$httpPort</URLBase><device><deviceType>$MEDIA_RENDERER</deviceType><presentationURL>/</presentationURL><friendlyName>${
-      context.getString(R.string.application_name).escapeXml()
+      DlnaSoap.escapeXml(context.getString(R.string.application_name))
     }</friendlyName><manufacturer>Microsoft Corporation</manufacturer><manufacturerURL>http://www.microsoft.com</manufacturerURL><modelDescription>Media Renderer</modelDescription><modelName>Windows Media Player</modelName><modelURL>http://go.microsoft.com/fwlink/Linkld=105927</modelURL><dlna:X_DLNADOC xmlns:dlna="urn:schemas-dlna-org:device-1-0">DMR-1.50</dlna:X_DLNADOC><UDN>uuid:$uuid</UDN><serviceList>${
       serviceXml(
         AV_TRANSPORT, "AVTransport"
@@ -979,26 +966,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
   private fun parseHeaders(lines: List<String>): Map<String, String> =
     lines.mapNotNull { line -> line.indexOf(':').takeIf { it > 0 }?.let { line.take(it).lowercase(Locale.US).trim() to line.substring(it + 1).trim() } }.toMap()
-
-  private fun soapAction(request: HttpRequest): String {
-    request.headers["soapaction"]?.trim()?.trim('"')?.substringAfter('#')?.takeIf { it.isNotBlank() }?.let { return it }
-    val actionRegex = Regex("<(?:[A-Za-z0-9_]+:)?([A-Za-z0-9_]+)(?:\\s|>)", RegexOption.DOT_MATCHES_ALL)
-    return actionRegex.find(request.body.substringAfter("<s:Body", request.body))?.groupValues?.getOrNull(1).orEmpty()
-  }
-
-  private fun soapArg(body: String, name: String) =
-    Regex("<(?:[A-Za-z0-9_]+:)?$name(?:\\s[^>]*)?>(.*?)</(?:[A-Za-z0-9_]+:)?$name>", RegexOption.DOT_MATCHES_ALL).find(body)?.groupValues?.getOrNull(1)?.trim()?.unescapeXml().orEmpty()
-
-  private fun parseTime(value: String): Long {
-    val clean = value.trim().substringBefore(".")
-    val parts = clean.split(":").mapNotNull { it.toLongOrNull() }
-    return when (parts.size) {
-      3 -> parts[0] * 3600L + parts[1] * 60L + parts[2]
-      2 -> parts[0] * 60L + parts[1]
-      1 -> parts[0]
-      else -> 0L
-    } * 1000L
-  }
 
   private fun ssdpTargets(): List<String> = listOf("upnp:rootdevice", "uuid:$uuid", MEDIA_RENDERER, AV_TRANSPORT, CONNECTION_MANAGER, RENDERING_CONTROL)
   private fun usnFor(target: String) = when (target) {
