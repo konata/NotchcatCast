@@ -13,7 +13,9 @@ internal sealed interface AirPlaySetup {
     val timingPort: Int?
   ) : AirPlaySetup
 
-  data class Streams(val streams: List<AirPlayStream>) : AirPlaySetup
+  data class Streams(val streams: List<AirPlayStream>) : AirPlaySetup {
+    val unsupportedTypes get() = streams.mapNotNull { it.unsupportedType }
+  }
   data object Empty : AirPlaySetup
 
   companion object {
@@ -60,7 +62,14 @@ internal data class AirPlayStream(
   val audioFormat: Long? = null,
   val usingScreen: Boolean? = null,
   val isMedia: Boolean? = null
-)
+) {
+  val unsupportedType get() = type.takeUnless { it == TYPE_MIRROR || it in TYPE_AUDIO }
+
+  companion object {
+    const val TYPE_MIRROR = 110
+    val TYPE_AUDIO = setOf(96, 100, 101)
+  }
+}
 
 internal data class AirPlayStreamPort(val type: Int, val dataPort: Int, val controlPort: Int? = null)
 

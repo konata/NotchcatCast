@@ -157,22 +157,23 @@ class AirPlayReceiver(
     }
 
     is AirPlaySetup.Streams -> {
+      val unsupported = setup.unsupportedTypes
+      if (unsupported.isNotEmpty()) Log.w(TAG, "AirPlay SETUP unknown stream types=$unsupported")
       val ports = setup.streams.mapNotNull { stream ->
         Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null} control=${stream.controlPort} ct=${stream.compressionType} spf=${stream.samplesPerFrame} fmt=${stream.audioFormat} screen=${stream.usingScreen} media=${stream.isMedia}")
-        when (stream.type) {
-          110 -> {
+        when {
+          stream.type == AirPlayStream.TYPE_MIRROR -> {
             session.streamConnectionId = stream.connectionId
             AirPlayMirrorBus.start()
             send(CastCommand.StartMirror)
-            AirPlayStreamPort(type = 110, dataPort = startVideoServer())
+            AirPlayStreamPort(type = AirPlayStream.TYPE_MIRROR, dataPort = startVideoServer())
           }
 
-          96, 100, 101 -> audioSetupPort(stream.type)
+          stream.type in AirPlayStream.TYPE_AUDIO -> audioSetupPort(stream.type)
           else -> null
         }
       }
-      if (ports.isEmpty()) RtspResponse.empty(extra = mapOf("Session" to "1"))
-      else RtspResponse.ok(AirPlaySetup.responseStreams(ports), BPLIST, extra = mapOf("Session" to "1"))
+      RtspResponse.ok(AirPlaySetup.responseStreams(ports), BPLIST, extra = mapOf("Session" to "1"), close = unsupported.isNotEmpty())
     }
 
     AirPlaySetup.Empty -> RtspResponse.empty(extra = mapOf("Session" to "1"))

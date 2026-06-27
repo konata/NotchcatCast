@@ -33,7 +33,7 @@ internal object AirPlayRtsp {
     }
 
     companion object {
-      fun ok(body: ByteArray, contentType: String, extra: Map<String, String> = emptyMap()) = Response(200, "OK", body, contentType, extra)
+      fun ok(body: ByteArray, contentType: String, extra: Map<String, String> = emptyMap(), close: Boolean = false) = Response(200, "OK", body, contentType, extra, close)
       fun empty(extra: Map<String, String> = emptyMap()) = Response(200, "OK", extra = extra)
     }
   }

@@ -79,6 +79,22 @@ class AirPlaySetupTest {
   }
 
   @Test
+  fun streamsExposeUnsupportedTypes() {
+    val body = BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
+      put("streams", NSArray(
+        NSDictionary().apply { put("type", 110) },
+        NSDictionary().apply { put("type", 96) },
+        NSDictionary().apply { put("type", 777) }
+      ))
+    })
+
+    val setup = AirPlaySetup.parse(body) as AirPlaySetup.Streams
+
+    assertEquals(emptyList<Int>(), setup.streams.take(2).mapNotNull { it.unsupportedType })
+    assertEquals(listOf(777), setup.unsupportedTypes)
+  }
+
+  @Test
   fun setupResponsesMatchAirPlayMirrorShape() {
     val session = AirPlaySetup.responseSession(eventPort = 0, timingPort = 43210).dict()
     val video = AirPlaySetup.responseStreams(listOf(AirPlayStreamPort(type = 110, dataPort = 41000))).dict()
@@ -88,6 +104,14 @@ class AirPlaySetupTest {
     assertTrue(video.containsKey("streams"))
     assertFalse(video.containsKey("eventPort"))
     assertFalse(video.containsKey("timingPort"))
+  }
+
+  @Test
+  fun streamResponseCanRepresentNoStartedStreams() {
+    val response = AirPlaySetup.responseStreams(emptyList()).dict()
+    val streams = response.objectForKey("streams").toJavaObject() as Array<*>
+
+    assertEquals(0, streams.size)
   }
 
   @Test
