@@ -8,4 +8,6 @@ internal object AirPlayControl {
     method == "POST" && path == "/audioMode" -> true
     else -> false
   }
+
+  fun isMisdirected(method: String, path: String) = method == "POST" && path == "/fp-setup2"
 }

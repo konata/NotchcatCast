@@ -126,6 +126,7 @@ class AirPlayReceiver(
       request.method == "RECORD" -> RtspResponse.empty(extra = mapOf("Session" to "1", "Audio-Latency" to "11025"))
       request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
       AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = mapOf("Session" to "1"))
+      AirPlayControl.isMisdirected(request.method, path) -> RtspResponse(421, "Misdirected Request")
       request.method == "TEARDOWN" -> teardown()
       else -> RtspResponse(404, "Not Found", "Not Found".toByteArray(), "text/plain")
     }

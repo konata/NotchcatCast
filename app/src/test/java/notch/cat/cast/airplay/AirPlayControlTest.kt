@@ -17,4 +17,10 @@ class AirPlayControlTest {
   fun doesNotTreatUnknownPostAsNoop() {
     assertFalse(AirPlayControl.isNoop("POST", "/unknown"))
   }
+
+  @Test
+  fun marksUnsupportedFairPlayVariantAsMisdirected() {
+    assertTrue(AirPlayControl.isMisdirected("POST", "/fp-setup2"))
+    assertFalse(AirPlayControl.isMisdirected("POST", "/fp-setup"))
+  }
 }
