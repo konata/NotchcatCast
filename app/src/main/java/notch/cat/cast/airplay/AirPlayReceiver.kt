@@ -3,8 +3,6 @@ package notch.cat.cast.airplay
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.dd.plist.NSDictionary
-import com.dd.plist.PropertyListParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +31,26 @@ class AirPlayReceiver(
   private var discovery: AirPlayDiscovery? = null
   private var timing: AirPlayTiming? = null
   private val session = AirPlaySession(publicKeySeed)
+  private val router by lazy {
+    AirPlayRouter(
+      identity = AirPlayIdentity(
+        name = context.getString(R.string.application_name),
+        uuid = uuid,
+        deviceId = AirPlayDiscovery.deviceId(uuid),
+        publicKey = session.publicKey,
+        publicKeyHex = session.publicKeyHex
+      ),
+      callbacks = AirPlayRouter.Callbacks(
+        playUrl = ::playUrl,
+        stop = { send(CastCommand.Stop) },
+        pairSetup = session::pairSetup,
+        pairVerify = ::pairVerify,
+        fairPlaySetup = session::fairPlaySetup,
+        setup = ::setup,
+        teardown = ::teardown
+      )
+    )
+  }
 
   fun start(): Int {
     if (scope?.isActive == true) return server?.localPort ?: 0
@@ -109,46 +127,12 @@ class AirPlayReceiver(
   }
 
   private fun route(request: RtspRequest, remote: InetAddress): RtspResponse {
-    val path = request.path.substringBefore("?")
-    val isGet = request.method == "GET" || request.method == "HEAD"
-    return when {
-      isGet && path == "/info" -> RtspResponse.ok(AirPlayInfo.response(
-        path = request.path,
-        headers = request.headers,
-        body = request.body,
-        name = context.getString(R.string.application_name),
-        uuid = uuid,
-        deviceId = AirPlayDiscovery.deviceId(uuid),
-        publicKey = session.publicKey,
-        publicKeyHex = session.publicKeyHex
-      ), BPLIST)
-      isGet && path == "/server-info" -> RtspResponse.ok(AirPlayServerInfo.xml(AirPlayDiscovery.deviceId(uuid)), XML_PLIST)
-      isGet && path == "/playback-info" -> RtspResponse.ok(playbackInfoPlist(), XML_PLIST)
-      isGet && path == "/scrub" -> RtspResponse.ok("duration: 0.0\nposition: 0.0\n".toByteArray(), "text/parameters")
-      request.method == "POST" && path == "/play" -> airplayUrlPlay(request)
-      request.method == "POST" && path == "/rate" -> RtspResponse.empty()
-      request.method == "POST" && path == "/stop" -> send(CastCommand.Stop).let { RtspResponse.empty() }
-      request.method == "POST" && path == "/pair-setup" -> RtspResponse.ok(session.pairSetup(), "application/octet-stream")
-      request.method == "POST" && path == "/pair-verify" -> pairVerify(request)
-      request.method == "POST" && path == "/fp-setup" -> RtspResponse.ok(session.fairPlaySetup(request.body), "application/octet-stream")
-      request.method == "OPTIONS" -> RtspResponse.empty(extra = mapOf("Public" to "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER"))
-      request.method == "SETUP" -> setup(request, remote)
-      request.method == "RECORD" -> RtspResponse.empty(extra = mapOf("Session" to "1", "Audio-Latency" to "11025"))
-      request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
-      AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = AirPlayControl.noopExtra(request.method, path))
-      AirPlayControl.isMisdirected(request.method, path) -> RtspResponse(421, "Misdirected Request")
-      request.method == "TEARDOWN" -> teardown(request)
-      else -> RtspResponse(404, "Not Found", "Not Found".toByteArray(), "text/plain")
-    }
+    return router.route(request, remote)
   }
 
-  private fun airplayUrlPlay(request: RtspRequest): RtspResponse {
-    val params = airplayParams(request)
-    val uri = params["Content-Location"] ?: params["content-location"] ?: ""
-    if (uri.isBlank()) return RtspResponse(400, "Bad Request", "Missing Content-Location".toByteArray(), "text/plain")
+  private fun playUrl(uri: String) {
     Log.i(TAG, "AirPlay URL host=${runCatching { Uri.parse(uri).host.orEmpty() }.getOrDefault("")}")
     send(CastCommand.Load(uri, play = true))
-    return RtspResponse.empty()
   }
 
   private fun pairVerify(request: RtspRequest): RtspResponse {
@@ -237,32 +221,8 @@ class AirPlayReceiver(
     return (audio ?: error("AirPlay audio unavailable")).setup(type)
   }
 
-  private fun playbackInfoPlist() = xmlPlist(
-    """
-    <key>duration</key><real>0</real>
-    <key>position</key><real>0</real>
-    <key>rate</key><real>1</real>
-    <key>readyToPlay</key><true/>
-    """.trimIndent()
-  )
-
-  private fun airplayParams(request: RtspRequest): Map<String, String> {
-    runCatching {
-      (PropertyListParser.parse(request.body) as? NSDictionary)?.let { dict ->
-        return dict.allKeys().associateWith { key -> dict.objectForKey(key).toJavaObject().toString() }
-      }
-    }
-    return String(request.body, Charsets.UTF_8).lineSequence().mapNotNull { line ->
-      line.indexOf(':').takeIf { it > 0 }?.let { line.take(it).trim() to line.substring(it + 1).trim() }
-    }.toMap()
-  }
-
-  private fun xmlPlist(body: String) =
-    """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>$body</dict></plist>""".toByteArray(Charsets.UTF_8)
-
   private companion object {
     const val TAG = "mang"
     const val BPLIST = "application/x-apple-binary-plist"
-    const val XML_PLIST = "text/x-apple-plist+xml"
   }
 }
