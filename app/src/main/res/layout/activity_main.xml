@@ -18,6 +18,13 @@
         app:shutter_background_color="@android:color/black"
         app:use_controller="false" />
 
+    <SurfaceView
+        android:id="@+id/mirror_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:keepScreenOn="true"
+        android:visibility="gone" />
+
     <View
         android:id="@+id/idle_backdrop"
         android:layout_width="match_parent"

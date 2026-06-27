@@ -16,8 +16,6 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import android.net.Uri
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
@@ -26,6 +24,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
+import android.view.SurfaceHolder
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -44,8 +43,6 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import com.dd.plist.NSDictionary
-import com.dd.plist.PropertyListParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,6 +54,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.databinding.ActivityMainBinding
+import notch.cat.cast.airplay.AirPlayMirrorBus
+import notch.cat.cast.airplay.AirPlayMirrorDecoder
+import notch.cat.cast.airplay.AirPlayReceiver
 import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.Inet4Address
@@ -72,6 +72,7 @@ import java.util.Locale
 import java.util.UUID
 
 private const val TAG = "mang"
+private const val MIRROR_URI = "airplay://screen-mirror"
 private const val OPEN_PLAYER_CHANNEL_ID = "notch_cat_cast_open_player"
 private const val OPEN_PLAYER_NOTIFICATION_ID = 1002
 
@@ -105,12 +106,14 @@ class StartReceiver : BroadcastReceiver() {
   }
 }
 
-private sealed interface CastCommand {
+sealed interface CastCommand {
   data class Load(val uri: String, val play: Boolean) : CastCommand
   data class Seek(val positionMs: Long) : CastCommand
   data object Play : CastCommand
   data object Pause : CastCommand
   data object Stop : CastCommand
+  data object StartMirror : CastCommand
+  data object StopMirror : CastCommand
 }
 
 private object CastSession {
@@ -143,6 +146,8 @@ private object CastSession {
       CastCommand.Play -> StateStore.setTransport(TransportState.Playing)
       CastCommand.Pause -> StateStore.setTransport(TransportState.Paused)
       CastCommand.Stop -> StateStore.clearMedia()
+      CastCommand.StartMirror -> StateStore.startMirror()
+      CastCommand.StopMirror -> StateStore.clearMedia()
 
       is CastCommand.Seek -> StateStore.setPlayerPosition(command.positionMs.coerceAtLeast(0L), StateStore.state.value.durationMs)
     }
@@ -151,6 +156,7 @@ private object CastSession {
 
 class CastService : Service() {
   private var server: Dmr? = null
+  private var airplay: AirPlayReceiver? = null
   private var multicastLock: WifiManager.MulticastLock? = null
 
   override fun onCreate() {
@@ -162,6 +168,8 @@ class CastService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY.also { startDmr() }
 
   override fun onDestroy() {
+    airplay?.stop()
+    airplay = null
     server?.stop()
     server = null
     runCatching { multicastLock?.release() }
@@ -181,6 +189,7 @@ class CastService : Service() {
     val dmr = Dmr(applicationContext) { CastSession.send(this, it) }
     val info = dmr.start()
     server = dmr
+    airplay = AirPlayReceiver(applicationContext, info.uuid) { CastSession.send(this, it) }.also { it.start() }
     StateStore.setServerState(
       running = true, uuid = info.uuid, ipAddress = info.ipAddress, httpPort = info.httpPort, wifiName = ssid(applicationContext), multicastLocked = multicastLock?.isHeld == true
     )
@@ -209,6 +218,7 @@ class IndexActivity : ComponentActivity() {
   private var audioFallbackUsed = false
   private var lastVolume = StateStore.state.value.volume
   private var lastMuted = StateStore.state.value.muted
+  private var mirrorDecoder: AirPlayMirrorDecoder? = null
   private var permissionFlow = false
   private var askedWifiPermission = false
   private var askedNotificationPermission = false
@@ -223,6 +233,18 @@ class IndexActivity : ComponentActivity() {
       CastCommand.Pause -> pause()
       CastCommand.Stop -> stop()
       is CastCommand.Seek -> seek(command.positionMs)
+      CastCommand.StartMirror -> startMirror()
+      CastCommand.StopMirror -> stopMirror()
+    }
+  }
+  private val mirrorSurface = object : SurfaceHolder.Callback {
+    override fun surfaceCreated(holder: SurfaceHolder) {
+      attachMirrorDecoder(holder)
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+      releaseMirrorDecoder()
     }
   }
 
@@ -244,6 +266,7 @@ class IndexActivity : ComponentActivity() {
     binding = ActivityMainBinding.inflate(layoutInflater)
     setContentView(binding.root)
     binding.playerView.player = player
+    binding.mirrorView.holder.addCallback(mirrorSurface)
     binding.permissionButton.setOnClickListener { beginPermissionFlow() }
 
     player.addListener(object : Player.Listener {
@@ -288,7 +311,8 @@ class IndexActivity : ComponentActivity() {
         launch {
           StateStore.state.collect { snapshot ->
             val idle = snapshot.currentUri.isBlank()
-            binding.playerView.isVisible = !idle
+            binding.playerView.isVisible = !idle && !snapshot.isMirror
+            binding.mirrorView.isVisible = snapshot.isMirror
             binding.idleBackdrop.isVisible = idle
             binding.idlePanel.isVisible = idle
             if (player.volume != snapshot.exoVolume) player.volume = snapshot.exoVolume
@@ -338,6 +362,7 @@ class IndexActivity : ComponentActivity() {
 
   private fun closeSurface() {
     CastSession.detach(surface)
+    releaseMirrorDecoder()
     controlBarJob?.cancel()
     controlBarJob = null
     binding.controlBar.animate().cancel()
@@ -378,6 +403,32 @@ class IndexActivity : ComponentActivity() {
 
   private fun stop() = onSurface {
     clearPlayback()
+  }
+
+  private fun startMirror() = onSurface {
+    player.stop()
+    player.clearMediaItems()
+    audioFallbackUsed = false
+    prompt(getString(R.string.player_playing))
+  }
+
+  private fun stopMirror() = onSurface {
+    mirrorDecoder?.onMirrorStopped()
+    clearPlayback()
+  }
+
+  private fun attachMirrorDecoder(holder: SurfaceHolder) {
+    if (!holder.surface.isValid) return
+    releaseMirrorDecoder()
+    mirrorDecoder = AirPlayMirrorDecoder(holder.surface).also { AirPlayMirrorBus.attach(it) }
+  }
+
+  private fun releaseMirrorDecoder() {
+    mirrorDecoder?.let {
+      AirPlayMirrorBus.detach(it)
+      it.release()
+    }
+    mirrorDecoder = null
   }
 
   private fun seek(positionMs: Long) = onSurface {
@@ -556,6 +607,7 @@ private data class CastState(
   val durationMs: Long = 0L, val volume: Int = 100, val muted: Boolean = false,
 ) {
   val exoVolume: Float get() = if (muted) 0f else volume.coerceIn(0, 100) / 100f
+  val isMirror: Boolean get() = currentUri == MIRROR_URI
 }
 
 enum class TransportState(val wire: String, val label: Int) {
@@ -614,6 +666,7 @@ private object StateStore {
   fun setPlayerPosition(positionMs: Long, durationMs: Long) = state.update { it.copy(positionMs = positionMs.coerceAtLeast(0L), durationMs = durationMs.coerceAtLeast(0L)) }
   fun setTransport(transportState: TransportState) = state.update { it.copy(transportState = if (it.currentUri.isBlank()) TransportState.NoMedia else transportState, lastError = "") }
   fun setWifiName(wifiName: String) = state.update { it.copy(wifiName = wifiName) }
+  fun startMirror() = state.update { it.copy(currentUri = MIRROR_URI, transportState = TransportState.Playing, positionMs = 0L, durationMs = 0L, lastError = "") }
   fun clearMedia(clearError: Boolean = true) = state.update {
     it.copy(currentUri = "", transportState = TransportState.NoMedia, positionMs = 0L, durationMs = 0L, lastError = if (clearError) "" else it.lastError)
   }
@@ -636,7 +689,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
   private var scope: CoroutineScope? = null
   private var httpServer: ServerSocket? = null
   private var ssdpSocket: MulticastSocket? = null
-  private var airplayListener: NsdManager.RegistrationListener? = null
 
   private lateinit var uuid: String
   private var ipAddress = "0.0.0.0"
@@ -661,7 +713,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     scope = serverScope
     serverScope.launch { httpLoop(serverSocket, serverScope) }
     serverScope.launch { ssdpLoop(serverScope) }
-    registerAirplay()
     serverScope.launch {
       delay(300)
       while (isActive) {
@@ -677,7 +728,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     if (::uuid.isInitialized) ssdpTargets().forEach { sendNotify(it, "ssdp:byebye") }
     scope = null
     activeScope.cancel()
-    unregisterAirplay()
     runCatching { ssdpSocket?.close() }
     ssdpSocket = null
     runCatching { httpServer?.close() }
@@ -712,20 +762,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
       val isGetLike = request.method == "GET" || request.method == "HEAD"
       val response = when {
-        isGetLike && route == "/server-info" -> airplayServerInfo()
-        isGetLike && route == "/playback-info" -> airplayPlaybackInfo()
-        isGetLike && route == "/scrub" -> airplayScrubInfo()
-        request.method == "POST" && route == "/play" -> airplayPlay(request)
-        request.method == "POST" && route == "/rate" -> airplayRate(request)
-        request.method == "POST" && route == "/scrub" -> airplayScrub(request)
-        request.method == "POST" && route == "/stop" -> send(CastCommand.Stop).let { HttpResponse.empty() }
-        request.method == "POST" && route == "/reverse" -> HttpResponse(
-          101,
-          "Switching Protocols",
-          "",
-          extraHeaders = mapOf("Upgrade" to "PTTH/1.0", "Connection" to "Upgrade")
-        )
-
         isGetLike && (route == "/" || route == "/description.xml") -> HttpResponse.ok(deviceDescription())
         isGetLike && (route == "/upnp/AVTransport/scpd.xml" || route == "/_urn:schemas-upnp-org:service:AVTransport_scpd.xml") -> HttpResponse.ok(asset("AVTransport.scpd.xml"))
         isGetLike && (route == "/upnp/RenderingControl/scpd.xml" || route == "/_urn:schemas-upnp-org:service:RenderingControl_scpd.xml") -> HttpResponse.ok(asset("RenderingControl.scpd.xml"))
@@ -791,44 +827,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
         if (serverScope.isActive) StateStore.setError("SSDP receive failed", it)
       }
     }
-  }
-
-  private fun registerAirplay() {
-    val nsd = context.getSystemService(NsdManager::class.java) ?: return
-    val listener = object : NsdManager.RegistrationListener {
-      override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-        Log.i(TAG, "Airplay registered ${serviceInfo.serviceName}:$httpPort")
-      }
-
-      override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = StateStore.setError("Airplay registration failed: $errorCode")
-      override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
-        Log.i(TAG, "Airplay unregistered")
-      }
-
-      override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-        Log.w(TAG, "Airplay unregister failed: $errorCode")
-      }
-    }
-    val service = NsdServiceInfo().apply {
-      serviceName = context.getString(R.string.application_name)
-      serviceType = "_airplay._tcp."
-      port = httpPort
-      setAttribute("deviceid", airplayDeviceId())
-      setAttribute("features", AIRPLAY_FEATURES_HEX)
-      setAttribute("model", AIRPLAY_MODEL)
-      setAttribute("srcvers", AIRPLAY_SOURCE_VERSION)
-      setAttribute("protovers", "1.0")
-      setAttribute("flags", "0x4")
-      setAttribute("pw", "false")
-    }
-    airplayListener = listener
-    runCatching { nsd.registerService(service, NsdManager.PROTOCOL_DNS_SD, listener) }.onFailure { StateStore.setError("Airplay registration failed", it) }
-  }
-
-  private fun unregisterAirplay() {
-    val listener = airplayListener ?: return
-    airplayListener = null
-    runCatching { context.getSystemService(NsdManager::class.java)?.unregisterService(listener) }.onFailure { Log.w(TAG, "Airplay unregister failed: ${it.message}") }
   }
 
   private fun sendNotify(target: String, nts: String) {
@@ -897,81 +895,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
     else -> soapFault("ConnectionManager", 401, "Invalid Action")
   }
-
-  private fun airplayPlay(request: HttpRequest): HttpResponse {
-    val params = airplayParams(request)
-    val uri = params["Content-Location"] ?: params["content-location"] ?: ""
-    if (uri.isBlank()) return HttpResponse(statusCode = 400, reason = "Bad Request", body = "Missing Content-Location", contentType = "text/plain; charset=\"utf-8\"")
-    val startSeconds = params["Start-Position"]?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: 0.0
-    Log.i(TAG, "Airplay play host=${runCatching { Uri.parse(uri).host.orEmpty() }.getOrDefault("")} uri=$uri")
-    send(CastCommand.Load(uri, play = true))
-    if (startSeconds > 0.0) send(CastCommand.Seek((startSeconds * 1000).toLong()))
-    return HttpResponse.empty()
-  }
-
-  private fun airplayRate(request: HttpRequest): HttpResponse {
-    if ((queryArg(request.path, "value")?.toDoubleOrNull() ?: 1.0) == 0.0) send(CastCommand.Pause) else send(CastCommand.Play)
-    return HttpResponse.empty()
-  }
-
-  private fun airplayScrub(request: HttpRequest): HttpResponse {
-    val position = queryArg(request.path, "position")?.toDoubleOrNull() ?: return HttpResponse.empty()
-    send(CastCommand.Seek((position * 1000).toLong()))
-    return HttpResponse.empty()
-  }
-
-  private fun airplayScrubInfo(): HttpResponse {
-    val state = StateStore.state.value
-    return HttpResponse.ok("duration: ${state.durationMs / 1000.0}\nposition: ${state.positionMs / 1000.0}\n", contentType = "text/parameters")
-  }
-
-  private fun airplayServerInfo() = airplayPlist(
-    """
-    <key>deviceid</key><string>${airplayDeviceId()}</string>
-    <key>features</key><integer>$AIRPLAY_FEATURES</integer>
-    <key>model</key><string>$AIRPLAY_MODEL</string>
-    <key>protovers</key><string>1.0</string>
-    <key>srcvers</key><string>$AIRPLAY_SOURCE_VERSION</string>
-    """.trimIndent()
-  )
-
-  private fun airplayPlaybackInfo(): HttpResponse {
-    val state = StateStore.state.value
-    val duration = state.durationMs / 1000.0
-    val position = state.positionMs / 1000.0
-    val rate = if (state.transportState == TransportState.Playing) 1 else 0
-    return airplayPlist(
-      """
-      <key>duration</key><real>$duration</real>
-      <key>loadedTimeRanges</key><array><dict><key>duration</key><real>$duration</real><key>start</key><real>0</real></dict></array>
-      <key>playbackBufferEmpty</key><false/>
-      <key>playbackBufferFull</key><false/>
-      <key>playbackLikelyToKeepUp</key><true/>
-      <key>position</key><real>$position</real>
-      <key>rate</key><real>$rate</real>
-      <key>readyToPlay</key><${if (state.transportState == TransportState.Transitioning) "false" else "true"}/>
-      <key>seekableTimeRanges</key><array><dict><key>duration</key><real>$duration</real><key>start</key><real>0</real></dict></array>
-      """.trimIndent()
-    )
-  }
-
-  private fun airplayPlist(body: String) = HttpResponse.ok(
-    """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>$body</dict></plist>""",
-    contentType = "text/x-apple-plist+xml"
-  )
-
-  private fun airplayParams(request: HttpRequest): Map<String, String> {
-    runCatching {
-      (PropertyListParser.parse(request.bodyBytes) as? NSDictionary)?.let { dict ->
-        return dict.allKeys().associateWith { key -> dict.objectForKey(key).toJavaObject().toString() }
-      }
-    }.onFailure { Log.w(TAG, "Airplay plist parse failed: ${it.message}") }
-    return request.body.lineSequence().mapNotNull { line ->
-      line.indexOf(':').takeIf { it > 0 }?.let { line.take(it).trim() to line.substring(it + 1).trim() }
-    }.toMap()
-  }
-
-  private fun airplayDeviceId() = uuid.replace("-", "").take(12).chunked(2).joinToString(":") { it.uppercase(Locale.US) }
 
   private fun soapOk(service: String, action: String, values: Map<String, String> = emptyMap()) =
     HttpResponse.ok(
@@ -1053,11 +976,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     }
   }
 
-  private fun queryArg(path: String, name: String) = path.substringAfter('?', "").split('&').firstNotNullOfOrNull { part ->
-    val index = part.indexOf('=')
-    if (index <= 0 || !part.take(index).equals(name, ignoreCase = true)) null else Uri.decode(part.substring(index + 1))
-  }
-
   private fun parseHeaders(lines: List<String>): Map<String, String> =
     lines.mapNotNull { line -> line.indexOf(':').takeIf { it > 0 }?.let { line.take(it).lowercase(Locale.US).trim() to line.substring(it + 1).trim() } }.toMap()
 
@@ -1113,10 +1031,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     const val RENDERING_CONTROL = "urn:schemas-upnp-org:service:RenderingControl:1"
     const val CONNECTION_MANAGER = "urn:schemas-upnp-org:service:ConnectionManager:1"
     const val SINK_PROTOCOL_INFO = "http-get:*:video/mp4:*,http-get:*:video/mpeg:*,http-get:*:application/vnd.apple.mpegurl:*,http-get:*:application/x-mpegURL:*,http-get:*:*:*"
-    const val AIRPLAY_FEATURES = 17
-    const val AIRPLAY_FEATURES_HEX = "0x11"
-    const val AIRPLAY_MODEL = "AppleTV2,1"
-    const val AIRPLAY_SOURCE_VERSION = "130.14"
     const val SERVER_HEADER = "Linux/5.15.170-android14-11-gf4a1f03072af HTTP/1.0 BDLE+DLNA/1.1 NotchCatCast/1.0"
     const val MAX_LOG_BODY = 2048
     const val SOCKET_TIMEOUT_MS = 10_000
