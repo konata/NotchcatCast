@@ -2,6 +2,7 @@ package notch.cat.cast.airplay
 
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.util.Log
 import android.view.Surface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,17 @@ data class AirPlayAvcConfig(val sps: ByteArray, val pps: ByteArray) {
 
   companion object {
     private val START_CODE = byteArrayOf(0, 0, 0, 1)
+  }
+}
+
+internal data class AirPlayInputWrite(val queued: Boolean, val size: Int)
+
+internal object AirPlayCodecInput {
+  fun writeFrame(buffer: ByteBuffer, frame: ByteArray): AirPlayInputWrite {
+    buffer.clear()
+    if (frame.size > buffer.capacity()) return AirPlayInputWrite(queued = false, size = 0)
+    buffer.put(frame)
+    return AirPlayInputWrite(queued = true, size = frame.size)
   }
 }
 
@@ -121,13 +133,13 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
     val active = codec ?: return
     val inputIndex = active.dequeueInputBuffer(10_000)
     if (inputIndex >= 0) {
-      var written = 0
-      active.getInputBuffer(inputIndex)?.apply {
-        clear()
-        written = frame.size.coerceAtMost(capacity())
-        put(frame, 0, written)
+      val write = active.getInputBuffer(inputIndex)?.let { AirPlayCodecInput.writeFrame(it, frame) } ?: AirPlayInputWrite(queued = false, size = 0)
+      if (!write.queued) {
+        Log.w(TAG, "AirPlay frame too large for decoder input: frame=${frame.size}")
+        active.queueInputBuffer(inputIndex, 0, 0, ptsUs, 0)
+        return
       }
-      active.queueInputBuffer(inputIndex, 0, written, ptsUs, 0)
+      active.queueInputBuffer(inputIndex, 0, write.size, ptsUs, 0)
       ptsUs += 33_333L
     }
 
@@ -150,5 +162,9 @@ class AirPlayMirrorDecoder(private val surface: Surface) : AirPlayMirrorSink {
     data class Config(val config: AirPlayAvcConfig) : Event
     data class Frame(val frame: ByteArray) : Event
     data object Stop : Event
+  }
+
+  private companion object {
+    const val TAG = "mang"
   }
 }
