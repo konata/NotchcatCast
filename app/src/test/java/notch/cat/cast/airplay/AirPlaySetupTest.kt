@@ -57,6 +57,11 @@ class AirPlaySetupTest {
         NSDictionary().apply {
           put("type", 96)
           put("controlPort", 62989)
+          put("ct", 2)
+          put("spf", 352)
+          put("audioFormat", 262144)
+          put("usingScreen", true)
+          put("isMedia", false)
         }
       ))
     })
@@ -65,6 +70,12 @@ class AirPlaySetupTest {
 
     assertEquals(listOf(110, 96), setup.streams.map { it.type })
     assertEquals("7", setup.streams[0].connectionId)
+    assertEquals(62989, setup.streams[1].controlPort)
+    assertEquals(2, setup.streams[1].compressionType)
+    assertEquals(352, setup.streams[1].samplesPerFrame)
+    assertEquals(262144L, setup.streams[1].audioFormat)
+    assertTrue(setup.streams[1].usingScreen == true)
+    assertFalse(setup.streams[1].isMedia == true)
   }
 
   @Test

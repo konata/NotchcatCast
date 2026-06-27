@@ -158,7 +158,7 @@ class AirPlayReceiver(
 
     is AirPlaySetup.Streams -> {
       val ports = setup.streams.mapNotNull { stream ->
-        Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null}")
+        Log.i(TAG, "AirPlay SETUP stream type=${stream.type} connection=${stream.connectionId != null} control=${stream.controlPort} ct=${stream.compressionType} spf=${stream.samplesPerFrame} fmt=${stream.audioFormat} screen=${stream.usingScreen} media=${stream.isMedia}")
         when (stream.type) {
           110 -> {
             session.streamConnectionId = stream.connectionId

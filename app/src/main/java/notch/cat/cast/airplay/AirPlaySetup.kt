@@ -51,7 +51,16 @@ internal sealed interface AirPlaySetup {
   }
 }
 
-internal data class AirPlayStream(val type: Int, val connectionId: String?)
+internal data class AirPlayStream(
+  val type: Int,
+  val connectionId: String?,
+  val controlPort: Int? = null,
+  val compressionType: Int? = null,
+  val samplesPerFrame: Int? = null,
+  val audioFormat: Long? = null,
+  val usingScreen: Boolean? = null,
+  val isMedia: Boolean? = null
+)
 
 internal data class AirPlayStreamPort(val type: Int, val dataPort: Int, val controlPort: Int? = null)
 
@@ -71,6 +80,15 @@ private fun NSDictionary.streams(): List<AirPlayStream>? {
       is String -> value
       else -> null
     }
-    AirPlayStream(type, connectionId)
+    AirPlayStream(
+      type = type,
+      connectionId = connectionId,
+      controlPort = (stream["controlPort"] as? Number)?.toInt(),
+      compressionType = (stream["ct"] as? Number)?.toInt(),
+      samplesPerFrame = (stream["spf"] as? Number)?.toInt(),
+      audioFormat = (stream["audioFormat"] as? Number)?.toLong(),
+      usingScreen = stream["usingScreen"] as? Boolean,
+      isMedia = stream["isMedia"] as? Boolean
+    )
   }.takeIf { it.isNotEmpty() }
 }
