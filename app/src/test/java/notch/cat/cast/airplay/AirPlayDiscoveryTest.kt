@@ -16,8 +16,29 @@ class AirPlayDiscoveryTest {
     assertEquals("AppleTV3,2", airplay["model"])
     assertEquals("uuid-value", airplay["pi"])
     assertEquals("pk-value", airplay["pk"])
-    assertEquals("0x5A7FFEE6,0x0", raop["ft"])
-    assertEquals("0x4", raop["sf"])
-    assertEquals("AppleTV3,2", raop["am"])
+    assertEquals(
+      mapOf(
+        "ch" to "2",
+        "cn" to "0,1,2,3",
+        "da" to "true",
+        "et" to "0,3,5",
+        "vv" to "2",
+        "ft" to "0x5A7FFEE6,0x0",
+        "am" to "AppleTV3,2",
+        "md" to "0,1,2",
+        "rhd" to "5.6.0.0",
+        "pw" to "false",
+        "sf" to "0x4",
+        "sr" to "44100",
+        "ss" to "16",
+        "sv" to "false",
+        "tp" to "UDP",
+        "txtvers" to "1",
+        "vs" to "220.68",
+        "vn" to "65537",
+        "pk" to "pk-value",
+      ),
+      raop
+    )
   }
 }

@@ -14,24 +14,25 @@ internal object AirPlayTxt {
   )
 
   fun raop(pk: String) = linkedMapOf(
-    "txtvers" to "1",
-    "am" to AirPlayProfile.MODEL,
     "ch" to "2",
-    "cn" to "1,3",
+    "cn" to "0,1,2,3",
     "da" to "true",
     "et" to "0,3,5",
-    "ek" to "1",
+    "vv" to "2",
     "ft" to AirPlayProfile.FEATURES_HEX,
+    "am" to AirPlayProfile.MODEL,
     "md" to "0,1,2",
-    "pk" to pk,
+    "rhd" to "5.6.0.0",
+    "pw" to "false",
+    "sf" to AirPlayProfile.FLAGS_HEX,
     "sr" to "44100",
     "ss" to "16",
     "sv" to "false",
-    "sm" to "false",
     "tp" to "UDP",
-    "sf" to AirPlayProfile.FLAGS_HEX,
+    "txtvers" to "1",
     "vs" to AirPlayProfile.SOURCE_VERSION,
     "vn" to "65537",
+    "pk" to pk,
   )
 
   fun bytes(values: Map<String, String>) = values.flatMap { (key, value) ->
