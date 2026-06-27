@@ -23,10 +23,12 @@ import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.edit
@@ -54,9 +56,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import notch.cat.cast.databinding.ActivityMainBinding
+import notch.cat.cast.airplay.AirPlayCodecConfig
 import notch.cat.cast.airplay.AirPlayKey
 import notch.cat.cast.airplay.AirPlayMirrorBus
 import notch.cat.cast.airplay.AirPlayMirrorDecoder
+import notch.cat.cast.airplay.AirPlayMirrorSink
 import notch.cat.cast.airplay.AirPlayReceiver
 import java.net.DatagramPacket
 import java.net.Inet4Address
@@ -69,6 +73,7 @@ import java.net.Socket
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlin.math.roundToInt
 
 private const val TAG = "mang"
 private const val MIRROR_URI = "airplay://screen-mirror"
@@ -81,7 +86,21 @@ private fun Context.hasWifiNamePermission() = checkSelfPermission(Manifest.permi
 private fun Context.hasCastNotificationPermission() = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 private fun Context.hasOverlayPermission() = Settings.canDrawOverlays(this)
 private fun Context.hasCastSetupPermissions() = hasWifiNamePermission() && hasCastNotificationPermission() && hasOverlayPermission()
-private fun Context.openPlayerPage() = if (hasOverlayPermission()) runCatching { startActivity(playerIntent()) }.onFailure { Log.e(TAG, "open player page failed", it) } else notifyOpenPlayer()
+internal data class PlayerOpenPlan(val tryActivity: Boolean, val notifyOnFailure: Boolean)
+internal fun playerOpenPlan(canPostNotification: Boolean) = PlayerOpenPlan(tryActivity = true, notifyOnFailure = canPostNotification)
+private fun Context.openPlayerPage() {
+  val plan = playerOpenPlan(hasCastNotificationPermission())
+  val opened = if (plan.tryActivity) {
+    runCatching {
+      startActivity(playerIntent())
+      cancelOpenPlayerNotification()
+    }.onFailure { Log.e(TAG, "open player page failed", it) }.isSuccess
+  } else {
+    false
+  }
+  if (opened) return
+  if (plan.notifyOnFailure) notifyOpenPlayer() else Log.w(TAG, "cannot notify player open: missing POST_NOTIFICATIONS")
+}
 private fun Context.notifyOpenPlayer() {
   if (!hasCastNotificationPermission()) {
     Log.w(TAG, "cannot notify player open: missing POST_NOTIFICATIONS")
@@ -96,6 +115,18 @@ private fun Context.notifyOpenPlayer() {
 }
 private fun Context.cancelOpenPlayerNotification() = getSystemService(NotificationManager::class.java)?.cancel(OPEN_PLAYER_NOTIFICATION_ID)
 private val START_ACTIONS = setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_USER_UNLOCKED, Intent.ACTION_MY_PACKAGE_REPLACED)
+internal data class MirrorFit(val width: Int, val height: Int)
+internal fun mirrorFit(containerWidth: Int, containerHeight: Int, contentWidth: Int, contentHeight: Int): MirrorFit {
+  if (containerWidth <= 0 || containerHeight <= 0) return MirrorFit(0, 0)
+  if (contentWidth <= 0 || contentHeight <= 0) return MirrorFit(containerWidth, containerHeight)
+  val contentRatio = contentWidth.toDouble() / contentHeight.toDouble()
+  val containerRatio = containerWidth.toDouble() / containerHeight.toDouble()
+  return if (contentRatio > containerRatio) {
+    MirrorFit(containerWidth, (containerWidth / contentRatio).roundToInt())
+  } else {
+    MirrorFit((containerHeight * contentRatio).roundToInt(), containerHeight)
+  }
+}
 
 class StartReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -218,6 +249,7 @@ class IndexActivity : ComponentActivity() {
   private var lastVolume = StateStore.state.value.volume
   private var lastMuted = StateStore.state.value.muted
   private var mirrorDecoder: AirPlayMirrorDecoder? = null
+  private var mirrorSink: AirPlayMirrorSink? = null
   private var permissionFlow = false
   private var askedWifiPermission = false
   private var askedNotificationPermission = false
@@ -419,15 +451,42 @@ class IndexActivity : ComponentActivity() {
   private fun attachMirrorDecoder(holder: SurfaceHolder) {
     if (!holder.surface.isValid) return
     releaseMirrorDecoder()
-    mirrorDecoder = AirPlayMirrorDecoder(holder.surface).also { AirPlayMirrorBus.attach(it) }
+    val decoder = AirPlayMirrorDecoder(holder.surface)
+    val sink = object : AirPlayMirrorSink {
+      override fun onMirrorConfig(config: AirPlayCodecConfig) {
+        runOnUiThread { fitMirrorView(config.width, config.height) }
+        decoder.onMirrorConfig(config)
+      }
+
+      override fun onMirrorFrame(frame: ByteArray) = decoder.onMirrorFrame(frame)
+      override fun onMirrorStopped() = decoder.onMirrorStopped()
+    }
+    mirrorDecoder = decoder
+    mirrorSink = sink
+    AirPlayMirrorBus.attach(sink)
   }
 
   private fun releaseMirrorDecoder() {
+    mirrorSink?.let { AirPlayMirrorBus.detach(it) }
+    mirrorSink = null
     mirrorDecoder?.let {
-      AirPlayMirrorBus.detach(it)
       it.release()
     }
     mirrorDecoder = null
+  }
+
+  private fun fitMirrorView(contentWidth: Int, contentHeight: Int) {
+    val rootWidth = binding.root.width
+    val rootHeight = binding.root.height
+    if (rootWidth <= 0 || rootHeight <= 0) {
+      binding.root.post { fitMirrorView(contentWidth, contentHeight) }
+      return
+    }
+    val fit = mirrorFit(rootWidth, rootHeight, contentWidth, contentHeight)
+    val params = binding.mirrorView.layoutParams as? FrameLayout.LayoutParams ?: FrameLayout.LayoutParams(fit.width, fit.height)
+    if (params.width == fit.width && params.height == fit.height && params.gravity == Gravity.CENTER) return
+    binding.mirrorView.layoutParams = FrameLayout.LayoutParams(fit.width, fit.height, Gravity.CENTER)
+    Log.i(TAG, "AirPlay mirror view fit video=${contentWidth}x$contentHeight view=${fit.width}x${fit.height} root=${rootWidth}x$rootHeight")
   }
 
   private fun seek(positionMs: Long) = onSurface {
