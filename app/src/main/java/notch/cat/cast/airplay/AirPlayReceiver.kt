@@ -108,6 +108,7 @@ class AirPlayReceiver(
     val isGet = request.method == "GET" || request.method == "HEAD"
     return when {
       isGet && path == "/info" -> RtspResponse.ok(AirPlayInfo.response(
+        path = request.path,
         headers = request.headers,
         body = request.body,
         name = context.getString(R.string.application_name),
@@ -129,7 +130,7 @@ class AirPlayReceiver(
       request.method == "SETUP" -> setup(request, remote)
       request.method == "RECORD" -> RtspResponse.empty(extra = mapOf("Session" to "1", "Audio-Latency" to "11025"))
       request.method == "GET_PARAMETER" -> RtspResponse.ok("volume: 0.000000\r\n".toByteArray(), "text/parameters")
-      AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = mapOf("Session" to "1"))
+      AirPlayControl.isNoop(request.method, path) -> RtspResponse.empty(extra = AirPlayControl.noopExtra(request.method, path))
       AirPlayControl.isMisdirected(request.method, path) -> RtspResponse(421, "Misdirected Request")
       request.method == "TEARDOWN" -> teardown(request)
       else -> RtspResponse(404, "Not Found", "Not Found".toByteArray(), "text/plain")

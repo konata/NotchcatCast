@@ -1,6 +1,7 @@
 package notch.cat.cast.airplay
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,6 +12,12 @@ class AirPlayControlTest {
     assertTrue(AirPlayControl.isNoop("FLUSH", "rtsp://receiver/session"))
     assertTrue(AirPlayControl.isNoop("POST", "/feedback"))
     assertTrue(AirPlayControl.isNoop("POST", "/audioMode"))
+  }
+
+  @Test
+  fun flushResponseCarriesRtptimeHeaderSeenInMirroringCaptures() {
+    assertEquals(mapOf("Session" to "1", "RTP-Info" to "rtptime=0"), AirPlayControl.noopExtra("FLUSH", "rtsp://receiver/session"))
+    assertEquals(mapOf("Session" to "1"), AirPlayControl.noopExtra("SET_PARAMETER", "rtsp://receiver/session"))
   }
 
   @Test

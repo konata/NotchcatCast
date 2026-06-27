@@ -79,6 +79,26 @@ class AirPlayInfoTest {
   }
 
   @Test
+  fun infoQueryQualifierReturnsRequestedTxtRecordsForHeaderlessDiscovery() {
+    val publicKey = ByteArray(32) { it.toByte() }
+    val publicKeyHex = publicKey.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    val info = AirPlayInfo.response(
+      path = "/info?txtAirPlay?txtRAOP",
+      headers = emptyMap(),
+      body = ByteArray(0),
+      name = "莽莽投屏",
+      uuid = "626d0415-e72f-3f1d-8d3c-7b20056358ed",
+      deviceId = "62:6D:04:15:E7:2F",
+      publicKey = publicKey,
+      publicKeyHex = publicKeyHex
+    ).dict()
+
+    assertEquals(listOf("txtAirPlay", "txtRAOP"), info.allKeys().sorted())
+    assertEquals(AirPlayProfile.FEATURES_HEX, txtRecord(info.data("txtAirPlay"))["features"])
+    assertEquals(AirPlayProfile.FEATURES_HEX, txtRecord(info.data("txtRAOP"))["ft"])
+  }
+
+  @Test
   fun infoBinaryQualifierRequestDoesNotFallThroughToFullInfo() {
     val publicKey = ByteArray(32) { it.toByte() }
     val info = AirPlayInfo.response(

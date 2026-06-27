@@ -8,6 +8,7 @@ import com.dd.plist.NSDictionary
 
 internal object AirPlayInfo {
   fun response(
+    path: String = "/info",
     headers: Map<String, String>,
     body: ByteArray,
     name: String,
@@ -16,8 +17,10 @@ internal object AirPlayInfo {
     publicKey: ByteArray,
     publicKeyHex: String
   ): ByteArray {
-    if (headers["content-type"]?.contains(BPLIST, ignoreCase = true) == true) {
-      val qualifiers = qualifiers(body)
+    val bplist = headers["content-type"]?.contains(BPLIST, ignoreCase = true) == true
+    val queryQualifiers = path.substringAfter("?", "").split("?").filter { it.isNotBlank() }.toSet()
+    if (bplist || queryQualifiers.isNotEmpty()) {
+      val qualifiers = if (bplist) qualifiers(body) else queryQualifiers
       return BinaryPropertyListWriter.writeToArray(NSDictionary().apply {
         if ("txtAirPlay" in qualifiers) put("txtAirPlay", NSData(AirPlayTxt.bytes(AirPlayTxt.airplay(deviceId, uuid, publicKeyHex))))
         if ("txtRAOP" in qualifiers) put("txtRAOP", NSData(AirPlayTxt.bytes(AirPlayTxt.raop(publicKeyHex))))
