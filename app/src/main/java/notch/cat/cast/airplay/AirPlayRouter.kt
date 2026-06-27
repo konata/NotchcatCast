@@ -44,7 +44,7 @@ internal class AirPlayRouter(
       isGet && path == "/server-info" -> AirPlayRtsp.Response.ok(AirPlayServerInfo.xml(identity.deviceId), XML_PLIST)
       isGet && path == "/playback-info" -> AirPlayRtsp.Response.ok(playbackInfoPlist(), XML_PLIST)
       isGet && path == "/scrub" -> AirPlayRtsp.Response.ok("duration: 0.0\nposition: 0.0\n".toByteArray(), "text/parameters")
-      request.method == "POST" && path == "/reverse" -> AirPlayRtsp.Response(101, "Switching Protocols", extra = mapOf("Connection" to "Upgrade", "Upgrade" to "PTTH/1.0"))
+      request.method == "POST" && path == "/reverse" -> AirPlayRtsp.Response.switchingProtocols(mapOf("Connection" to "Upgrade", "Upgrade" to "PTTH/1.0"))
       request.method == "POST" && path == "/play" -> airplayUrlPlay(request)
       request.method == "POST" && path == "/rate" -> AirPlayRtsp.Response.empty()
       request.method == "POST" && path == "/stop" -> callbacks.stop().let { AirPlayRtsp.Response.empty() }

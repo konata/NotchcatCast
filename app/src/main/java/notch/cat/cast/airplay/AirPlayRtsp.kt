@@ -15,7 +15,8 @@ internal object AirPlayRtsp {
     val body: ByteArray = ByteArray(0),
     val contentType: String? = null,
     val extra: Map<String, String> = emptyMap(),
-    val close: Boolean = false
+    val close: Boolean = false,
+    val includeContentLength: Boolean = true
   ) {
     fun bytes(request: Request): ByteArray {
       val protocol = if (request.protocol.startsWith("HTTP", ignoreCase = true)) "HTTP/1.1" else "RTSP/1.0"
@@ -25,7 +26,7 @@ internal object AirPlayRtsp {
         add("Date: ${DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(java.time.ZoneOffset.UTC))}")
         add("Server: AirTunes/${AirPlayProfile.SOURCE_VERSION}")
         add("Audio-Jack-Status: connected; type=analog")
-        add("Content-Length: ${body.size}")
+        if (includeContentLength) add("Content-Length: ${body.size}")
         contentType?.let { add("Content-Type: $it") }
         extra.forEach { (key, value) -> add("$key: $value") }
       }.joinToString("\r\n", postfix = "\r\n\r\n")
@@ -35,6 +36,7 @@ internal object AirPlayRtsp {
     companion object {
       fun ok(body: ByteArray, contentType: String, extra: Map<String, String> = emptyMap(), close: Boolean = false) = Response(200, "OK", body, contentType, extra, close)
       fun empty(extra: Map<String, String> = emptyMap()) = Response(200, "OK", extra = extra)
+      fun switchingProtocols(extra: Map<String, String>) = Response(101, "Switching Protocols", extra = extra, includeContentLength = false)
     }
   }
 

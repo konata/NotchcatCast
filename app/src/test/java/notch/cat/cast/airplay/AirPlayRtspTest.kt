@@ -64,4 +64,17 @@ class AirPlayRtspTest {
     assert(typed.contains("\r\nContent-Length: 0\r\n"))
     assert(!empty.contains("\r\nContent-Type:"))
   }
+
+  @Test
+  fun switchingProtocolsResponseDoesNotAddBodyFramingHeaders() {
+    val request = AirPlayRtsp.Request("POST", "/reverse", "HTTP/1.1", emptyMap(), ByteArray(0))
+
+    val text = String(AirPlayRtsp.Response.switchingProtocols(mapOf("Connection" to "Upgrade", "Upgrade" to "PTTH/1.0")).bytes(request), Charsets.ISO_8859_1)
+
+    assert(text.startsWith("HTTP/1.1 101 Switching Protocols\r\n"))
+    assert(!text.contains("\r\nContent-Length:"))
+    assert(!text.contains("\r\nContent-Type:"))
+    assert(text.contains("\r\nConnection: Upgrade\r\n"))
+    assert(text.contains("\r\nUpgrade: PTTH/1.0\r\n"))
+  }
 }
