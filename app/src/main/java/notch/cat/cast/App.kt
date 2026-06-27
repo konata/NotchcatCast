@@ -58,7 +58,6 @@ import notch.cat.cast.airplay.AirPlayKey
 import notch.cat.cast.airplay.AirPlayMirrorBus
 import notch.cat.cast.airplay.AirPlayMirrorDecoder
 import notch.cat.cast.airplay.AirPlayReceiver
-import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -69,7 +68,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.UUID
 
 private const val TAG = "mang"
@@ -677,6 +675,8 @@ private object StateStore {
 }
 
 private data class DmrInfo(val uuid: String, val ipAddress: String, val httpPort: Int)
+private typealias HttpRequest = DlnaHttp.Request
+private typealias HttpResponse = DlnaHttp.Response
 
 private class Dmr(private val context: Context, private val send: (CastCommand) -> Unit) {
   private var scope: CoroutineScope? = null
@@ -743,7 +743,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
   private fun handleHttp(socket: Socket) {
     socket.use {
-      val request = runCatching { readRequest(it) }.getOrElse { error ->
+      val request = runCatching { DlnaHttp.read(it.getInputStream()) }.getOrElse { error ->
         StateStore.setError("HTTP request parse failed", error)
         return
       } ?: return
@@ -773,7 +773,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
         else -> HttpResponse(statusCode = 404, reason = "Not Found", body = "Not Found", contentType = "text/plain; charset=\"utf-8\"")
       }
       Log.i(TAG, "HTTP response ${response.statusCode} ${request.method} $route")
-      writeResponse(it, if (request.method == "HEAD") response.copy(omitBody = true) else response)
+      DlnaHttp.write(it.getOutputStream(), if (request.method == "HEAD") response.copy(omitBody = true) else response, SERVER_HEADER, httpDate())
     }
   }
 
@@ -803,14 +803,14 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
       runCatching { socket.receive(packet) }.onSuccess {
         val message = String(packet.data, packet.offset, packet.length, Charsets.UTF_8)
         if (message.startsWith("M-SEARCH", ignoreCase = true)) {
-          val headers = parseHeaders(message.lines())
+          val headers = DlnaHttp.parseHeaders(message.lines())
           if (!headers["man"].orEmpty().contains("ssdp:discover", ignoreCase = true)) return@onSuccess
           val searchTarget = headers["st"] ?: return@onSuccess
           Log.i(TAG, "SSDP search from=${packet.address.hostAddress}:${packet.port} st=$searchTarget")
           val normalizedTarget = searchTarget.trim()
           ssdpTargets().filter { normalizedTarget.equals("ssdp:all", ignoreCase = true) || it.equals(normalizedTarget, ignoreCase = true) }.forEach { target ->
             sendUdp(
-              udpMessage(
+              DlnaHttp.message(
                 "HTTP/1.1 200 OK", "CACHE-CONTROL: max-age=1800", "DATE: ${httpDate()}", "EXT:", "LOCATION: ${locationUrl()}", "SERVER: $SERVER_HEADER", "ST: $target", "USN: ${usnFor(target)}"
               ), packet.address, packet.port, socket
             )
@@ -827,7 +827,7 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     val headers = mutableListOf("NOTIFY * HTTP/1.1", "HOST: $SSDP_ADDRESS:$SSDP_PORT")
     if (alive) headers += listOf("CACHE-CONTROL: max-age=1800", "LOCATION: ${locationUrl()}", "SERVER: $SERVER_HEADER")
     headers += listOf("NT: $target", "NTS: $nts", "USN: ${usnFor(target)}")
-    sendUdp(udpMessage(*headers.toTypedArray()), InetAddress.getByName(SSDP_ADDRESS), SSDP_PORT, ssdpSocket)
+    sendUdp(DlnaHttp.message(*headers.toTypedArray()), InetAddress.getByName(SSDP_ADDRESS), SSDP_PORT, ssdpSocket)
   }
 
   private fun sendUdp(message: String, address: InetAddress, port: Int, socket: MulticastSocket?) {
@@ -835,8 +835,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
     val packet = DatagramPacket(bytes, bytes.size, address, port)
     runCatching { socket?.send(packet) ?: MulticastSocket().use { it.send(packet) } }.onFailure { Log.w(TAG, "SSDP send failed: ${it.message}") }
   }
-
-  private fun udpMessage(vararg lines: String) = lines.joinToString("\r\n", postfix = "\r\n\r\n")
 
   private fun handleAvTransport(request: HttpRequest): HttpResponse {
     val action = runCatching { enumValueOf<AvTransportAction>(DlnaSoap.action(request.headers, request.body)) }.getOrNull() ?: return soapFault("AVTransport", 401, "Invalid Action")
@@ -912,61 +910,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
   private fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
 
-  private fun readRequest(socket: Socket): HttpRequest? {
-    val input = socket.getInputStream()
-    val headerBytes = ByteArrayOutputStream()
-    var b: Int
-    val last = ArrayDeque<Int>(4)
-    while (true) {
-      b = input.read()
-      if (b == -1) return null
-      headerBytes.write(b)
-      if (last.size == 4) last.removeFirst()
-      last.addLast(b)
-      if (last.size == 4 && last.toList() == listOf('\r'.code, '\n'.code, '\r'.code, '\n'.code)) break
-      if (headerBytes.size() > 65536) throw IllegalArgumentException("HTTP header too large")
-    }
-
-    val headerText = headerBytes.toString(Charsets.ISO_8859_1.name())
-    val lines = headerText.split("\r\n").filter { it.isNotEmpty() }
-    val requestLine = lines.firstOrNull() ?: return null
-    val parts = requestLine.split(" ", limit = 3)
-    if (parts.size < 2) return null
-    val headers = parseHeaders(lines.drop(1))
-    val contentLength = headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-    val bodyBytes = ByteArray(contentLength)
-    var offset = 0
-    while (offset < contentLength) {
-      val read = input.read(bodyBytes, offset, contentLength - offset)
-      if (read == -1) break
-      offset += read
-    }
-    return HttpRequest(method = parts[0].uppercase(Locale.US), path = parts[1], headers = headers, body = String(bodyBytes, 0, offset, Charsets.UTF_8), bodyBytes = bodyBytes.copyOf(offset))
-  }
-
-  private fun writeResponse(socket: Socket, response: HttpResponse) {
-    val bodyBytes = response.body.toByteArray(Charsets.UTF_8)
-    val hasConnection = response.extraHeaders.keys.any { it.equals("connection", ignoreCase = true) }
-    val headers = udpMessage(
-      *(listOf(
-        "HTTP/1.1 ${response.statusCode} ${response.reason}",
-        "DATE: ${httpDate()}",
-        "SERVER: $SERVER_HEADER",
-        "CONTENT-LENGTH: ${bodyBytes.size}",
-        "CONTENT-TYPE: ${response.contentType}",
-        if (hasConnection) null else "CONNECTION: close"
-      ).filterNotNull() + response.extraHeaders.map { (key, value) -> "$key: $value" }).toTypedArray()
-    )
-    socket.getOutputStream().use {
-      it.write(headers.toByteArray(Charsets.ISO_8859_1))
-      if (!response.omitBody) it.write(bodyBytes)
-      it.flush()
-    }
-  }
-
-  private fun parseHeaders(lines: List<String>): Map<String, String> =
-    lines.mapNotNull { line -> line.indexOf(':').takeIf { it > 0 }?.let { line.take(it).lowercase(Locale.US).trim() to line.substring(it + 1).trim() } }.toMap()
-
   private fun ssdpTargets(): List<String> = listOf("upnp:rootdevice", "uuid:$uuid", MEDIA_RENDERER, AV_TRANSPORT, CONNECTION_MANAGER, RENDERING_CONTROL)
   private fun usnFor(target: String) = when (target) {
     "uuid:$uuid" -> "uuid:$uuid"
@@ -976,20 +919,6 @@ private class Dmr(private val context: Context, private val send: (CastCommand) 
 
   private fun locationUrl(): String = "http://$ipAddress:$httpPort/description.xml"
   private fun httpDate(): String = DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(java.time.ZoneOffset.UTC))
-  private data class HttpRequest(val method: String, val path: String, val headers: Map<String, String>, val body: String, val bodyBytes: ByteArray)
-  private data class HttpResponse(
-    val statusCode: Int,
-    val reason: String,
-    val body: String,
-    val contentType: String = """text/xml; charset="utf-8"""",
-    val extraHeaders: Map<String, String> = emptyMap(),
-    val omitBody: Boolean = false
-  ) {
-    companion object {
-      fun ok(body: String, contentType: String = """text/xml; charset="utf-8"""") = HttpResponse(statusCode = 200, reason = "OK", body = body.trimStart(), contentType = contentType)
-      fun empty() = HttpResponse(statusCode = 200, reason = "OK", body = "")
-    }
-  }
 
   private companion object {
     const val SSDP_ADDRESS = "239.255.255.250"
