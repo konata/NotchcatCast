@@ -41,7 +41,7 @@ internal fun Context.wifiName(): String {
   val capabilities = connectivityManager?.getNetworkCapabilities(connectivityManager.activeNetwork)
   if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) return "Ethernet"
   val raw = (capabilities?.transportInfo as? WifiInfo)?.ssid ?: getSystemService(WifiManager::class.java)?.connectionInfo?.ssid ?: ""
-  return raw.trim().removeSurrounding("\"").replace('\n', ' ').replace('\r', ' ').takeUnless { it.isBlank() || it.equals("<unknown ssid>", ignoreCase = true) } ?: "未获取"
+  return raw.trim().removeSurrounding("\"").replace('\n', ' ').replace('\r', ' ').takeUnless { it.isBlank() || it.equals("<unknown ssid>", ignoreCase = true) } ?: getString(R.string.status_wifi_unacquired)
 }
 
 internal fun mirrorSourceSize(type: Int, header: ByteArray): Size? {

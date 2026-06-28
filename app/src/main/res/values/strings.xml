@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="application_name">莽莽投屏</string>
+    <string name="application_subtitle">Notch Cat Cast</string>
     <string name="player_play">播放</string>
     <string name="player_playing">播放中</string>
     <string name="player_paused">已暂停</string>
@@ -32,4 +33,13 @@
     <string name="notification_open_text">点击打开播放器继续播放</string>
     <string name="notification_open_channel">投屏提醒</string>
     <string name="permission_button_text">启用完整投屏体验</string>
+
+    <!-- Newly extracted strings -->
+    <string name="status_wifi_unacquired">未获取</string>
+    <string name="status_wifi_card_label">当前 Wi-Fi</string>
+    <string name="status_address_card_label">设备 IP 地址</string>
+    <string name="status_guide_card_label">投屏指南</string>
+    <string name="status_guide_card_value">选择「莽莽投屏」即可开始</string>
+    <string name="status_permission_card_label">安全与系统设置</string>
+    <string name="status_permission_card_value">点击配置完整投屏权限</string>
 </resources>

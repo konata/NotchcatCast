@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="application_name">Notch Cat</string>
+    <string name="application_subtitle"></string>
+    <string name="player_play">Play</string>
+    <string name="player_playing">Playing</string>
+    <string name="player_paused">Paused</string>
+    <string name="player_stopped">Stopped</string>
+    <string name="player_buffering">Buffering</string>
+    <string name="player_waiting">Ready</string>
+    <string name="seek_to">Seek to %1$s</string>
+    <string name="seek_with_time">%1$s  %2$s</string>
+    <string name="seek_back_10s">-10s</string>
+    <string name="seek_forward_30s">+30s</string>
+    <string name="volume_value">Volume %1$d%%</string>
+    <string name="volume_muted">Muted</string>
+    <string name="landing_caption">Standing by, waiting to cast your favorite content to the TV.</string>
+    <string name="status_panel_title">Connection Status</string>
+    <string name="status_panel_subtitle">Make sure your phone and TV are on the same network</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_starting">Starting</string>
+    <string name="status_error_state">Action Required</string>
+    <string name="status_wifi_label">Wi-Fi</string>
+    <string name="status_address_label">IP Address</string>
+    <string name="status_service_label">Service</string>
+    <string name="status_multicast_label">Multicast</string>
+    <string name="status_running">Running</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_locked">Ready</string>
+    <string name="status_unlocked">Not Ready</string>
+    <string name="notification_service_text">Waiting to cast</string>
+    <string name="notification_open_title">Cast request received</string>
+    <string name="notification_open_text">Click to open player and resume playback</string>
+    <string name="notification_open_channel">Cast Reminders</string>
+    <string name="permission_button_text">Enable full cast permissions</string>
+
+    <!-- Newly extracted strings -->
+    <string name="status_wifi_unacquired">Not Acquired</string>
+    <string name="status_wifi_card_label">Current Wi-Fi</string>
+    <string name="status_address_card_label">Device IP Address</string>
+    <string name="status_guide_card_label">How to Cast</string>
+    <string name="status_guide_card_value">Select \"Notch Cat Cast\"</string>
+    <string name="status_permission_card_label">Security &amp; System Settings</string>
+    <string name="status_permission_card_value">Configure cast permissions</string>
+</resources>

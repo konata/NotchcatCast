@@ -15,7 +15,7 @@
         <item name="android:layout_width">72dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:includeFontPadding">true</item>
-        <item name="android:textColor">#80E7DDD1</item>
+        <item name="android:textColor">#80C5DBEC</item>
         <item name="android:textSize">13sp</item>
     </style>
 
@@ -26,7 +26,52 @@
         <item name="android:ellipsize">end</item>
         <item name="android:includeFontPadding">true</item>
         <item name="android:maxLines">1</item>
-        <item name="android:textColor">#FFF8F1</item>
+        <item name="android:textColor">#FFFDF9</item>
         <item name="android:textSize">18sp</item>
+    </style>
+
+    <!-- Redesigned TV Dashboard Card Styles -->
+    <style name="CardContainer">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">80dp</item>
+        <item name="android:layout_marginBottom">16dp</item>
+        <item name="android:background">@drawable/glass_card_background</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingHorizontal">24dp</item>
+    </style>
+
+    <style name="CardIcon">
+        <item name="android:layout_width">32dp</item>
+        <item name="android:layout_height">32dp</item>
+        <item name="android:layout_marginEnd">20dp</item>
+        <item name="android:scaleType">fitCenter</item>
+    </style>
+
+    <style name="CardTextStack">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="CardLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#A2BDCE</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="CardValue">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#FFFDF9</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:includeFontPadding">false</item>
     </style>
 </resources>

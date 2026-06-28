@@ -41,12 +41,14 @@
         android:paddingHorizontal="64dp"
         android:paddingVertical="56dp">
 
+        <!-- Left Column: Brand Column -->
         <LinearLayout
             android:id="@+id/landing_hero"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="52dp"
-            android:layout_weight="6"
+            android:layout_marginEnd="64dp"
+            android:layout_weight="5"
+            android:gravity="center_vertical"
             android:orientation="vertical">
 
             <LinearLayout
@@ -59,19 +61,19 @@
 
                 <ImageView
                     android:id="@+id/status_icon"
-                    android:layout_width="136dp"
-                    android:layout_height="136dp"
-                    android:background="@drawable/icon_background"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:background="@drawable/mangmang_frame_background"
                     android:contentDescription="@string/application_name"
-                    android:padding="14dp"
+                    android:padding="16dp"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/ic_cat_foreground" />
+                    android:src="@drawable/ic_cat_pixel_sharp" />
 
                 <LinearLayout
                     android:id="@+id/brand_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="34dp"
+                    android:layout_marginStart="36dp"
                     android:orientation="vertical">
 
                     <TextView
@@ -79,153 +81,173 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/application_name"
-                        android:textColor="#FFF8F1"
-                        android:textSize="46sp"
+                        android:textColor="#FFFDF9"
+                        android:textSize="52sp"
                         android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/status_subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/application_subtitle"
+                        android:textColor="#A2BDCE"
+                        android:textSize="22sp" />
 
                     <TextView
                         android:id="@+id/status_state"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
-                        android:layout_marginTop="22dp"
-                        android:background="@drawable/status_pill"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="16dp"
+                        android:background="@drawable/status_state_background"
+                        android:drawableStart="@drawable/ic_status_dot"
+                        android:drawablePadding="8dp"
                         android:gravity="center"
-                        android:minWidth="138dp"
-                        android:paddingHorizontal="22dp"
-                        android:textColor="#FFF8F1"
-                        android:textSize="16sp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="16dp"
+                        android:textColor="#FFFDF9"
+                        android:textSize="14sp"
                         android:textStyle="bold" />
                 </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/permission_row"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="44dp"
-                android:orientation="horizontal"
-                android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/permission_button"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="3"
-                    android:background="@drawable/permission_button"
-                    android:clickable="true"
-                    android:defaultFocusHighlightEnabled="false"
-                    android:ellipsize="end"
-                    android:focusable="true"
-                    android:focusableInTouchMode="true"
-                    android:gravity="center"
-                    android:includeFontPadding="false"
-                    android:maxLines="1"
-                    android:nextFocusDown="@id/permission_button"
-                    android:nextFocusLeft="@id/permission_button"
-                    android:nextFocusRight="@id/permission_button"
-                    android:nextFocusUp="@id/permission_button"
-                    android:paddingHorizontal="26dp"
-                    android:text="@string/permission_button_text"
-                    android:textColor="@android:color/white"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="2" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/landing_caption"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="22dp"
-                android:gravity="center_vertical"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="40dp"
+                android:lineSpacingExtra="4dp"
                 android:includeFontPadding="false"
                 android:text="@string/landing_caption"
-                android:textColor="#99E7DDD1"
+                android:textColor="#80C5DBEC"
                 android:textSize="18sp" />
 
         </LinearLayout>
 
+        <!-- Right Column: Status/Info Dashboard Column -->
         <LinearLayout
             android:id="@+id/status_panel"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="4"
-            android:background="@drawable/status_panel"
-            android:orientation="vertical"
-            android:paddingHorizontal="26dp"
-            android:paddingVertical="24dp">
+            android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/status_panel_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/status_panel_title"
-                android:textColor="#FFF8F1"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/status_panel_subtitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/status_panel_subtitle"
-                android:textColor="#8FE7DDD1"
-                android:textSize="14sp" />
-
+            <!-- Card 1 (Wi-Fi) -->
             <LinearLayout
-                android:id="@+id/status_grid"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:orientation="vertical">
+                android:id="@+id/card_wifi"
+                style="@style/CardContainer">
 
-                <LinearLayout style="@style/StatusRow">
+                <ImageView
+                    style="@style/CardIcon"
+                    android:src="@drawable/ic_wifi"
+                    android:tint="#A2BDCE" />
+
+                <LinearLayout style="@style/CardTextStack">
                     <TextView
-                        style="@style/StatusLabel"
-                        android:text="@string/status_wifi_label" />
+                        style="@style/CardLabel"
+                        android:text="@string/status_wifi_card_label" />
                     <TextView
                         android:id="@+id/status_wifi_value"
-                        style="@style/StatusValue" />
-                </LinearLayout>
-
-                <LinearLayout style="@style/StatusRow">
-                    <TextView
-                        style="@style/StatusLabel"
-                        android:text="@string/status_address_label" />
-                    <TextView
-                        android:id="@+id/status_address_value"
-                        style="@style/StatusValue" />
-                </LinearLayout>
-
-                <LinearLayout style="@style/StatusRow">
-                    <TextView
-                        style="@style/StatusLabel"
-                        android:text="@string/status_service_label" />
-                    <TextView
-                        android:id="@+id/status_service_value"
-                        style="@style/StatusValue" />
-                </LinearLayout>
-
-                <LinearLayout style="@style/StatusRow">
-                    <TextView
-                        style="@style/StatusLabel"
-                        android:text="@string/status_multicast_label" />
-                    <TextView
-                        android:id="@+id/status_multicast_value"
-                        style="@style/StatusValue" />
+                        style="@style/CardValue" />
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- Card 2 (IP Address) -->
+            <LinearLayout
+                android:id="@+id/card_address"
+                style="@style/CardContainer">
+
+                <ImageView
+                    style="@style/CardIcon"
+                    android:src="@drawable/ic_network"
+                    android:tint="#A2BDCE" />
+
+                <LinearLayout style="@style/CardTextStack">
+                    <TextView
+                        style="@style/CardLabel"
+                        android:text="@string/status_address_card_label" />
+                    <TextView
+                        android:id="@+id/status_address_value"
+                        style="@style/CardValue" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Card 3 (Action or Guide Card) -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginBottom="16dp">
+
+                <!-- Guide State (Visible when permissions are set up) -->
+                <LinearLayout
+                    android:id="@+id/guide_layout"
+                    style="@style/CardContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginBottom="0dp"
+                    android:focusable="false"
+                    android:clickable="false">
+
+                    <ImageView
+                        style="@style/CardIcon"
+                        android:src="@drawable/ic_cast"
+                        android:tint="#A2BDCE" />
+
+                    <LinearLayout style="@style/CardTextStack">
+                        <TextView
+                            style="@style/CardLabel"
+                            android:text="@string/status_guide_card_label" />
+                        <TextView
+                            style="@style/CardValue"
+                            android:text="@string/status_guide_card_value" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Permission Setup State (Visible when permissions are missing) -->
+                <LinearLayout
+                    android:id="@+id/permission_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:id="@+id/permission_button"
+                        style="@style/CardContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_marginBottom="0dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true"
+                        android:nextFocusDown="@id/permission_button"
+                        android:nextFocusLeft="@id/permission_button"
+                        android:nextFocusRight="@id/permission_button"
+                        android:nextFocusUp="@id/permission_button">
+
+                        <ImageView
+                            style="@style/CardIcon"
+                            android:src="@drawable/ic_warning"
+                            android:tint="#FFE0B2" />
+
+                        <LinearLayout style="@style/CardTextStack">
+                            <TextView
+                                style="@style/CardLabel"
+                                android:text="@string/status_permission_card_label" />
+                            <TextView
+                                style="@style/CardValue"
+                                android:text="@string/status_permission_card_value" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Error Banner -->
             <TextView
                 android:id="@+id/status_error"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/status_error"
                 android:lineSpacingExtra="3dp"
                 android:paddingHorizontal="14dp"
@@ -233,6 +255,7 @@
                 android:textColor="#FFFFE7DD"
                 android:textSize="13sp"
                 android:visibility="gone" />
+
         </LinearLayout>
     </LinearLayout>
 

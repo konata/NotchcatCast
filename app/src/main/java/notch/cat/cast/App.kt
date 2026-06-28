@@ -259,6 +259,9 @@ class PlayerActivity : ComponentActivity() {
     }
     binding = ActivityMainBinding.inflate(layoutInflater)
     setContentView(binding.root)
+    val subtitle = getString(R.string.application_subtitle)
+    binding.statusSubtitle.text = subtitle
+    binding.statusSubtitle.isVisible = subtitle.isNotBlank()
     binding.playerView.player = player
     binding.mirrorView.holder.addCallback(mirrorSurface)
     binding.permissionButton.setOnClickListener { requestNextPermission() }
@@ -494,10 +497,8 @@ class PlayerActivity : ComponentActivity() {
         else -> R.string.status_starting
       }
     )
-    binding.statusWifiValue.text = snapshot.wifiName
+    binding.statusWifiValue.text = snapshot.wifiName.takeUnless { it.isBlank() } ?: getString(R.string.status_wifi_unacquired)
     binding.statusAddressValue.text = snapshot.ipAddress.takeUnless { it == "0.0.0.0" } ?: "-"
-    binding.statusServiceValue.text = getString(if (snapshot.serviceRunning) R.string.status_running else R.string.status_stopped)
-    binding.statusMulticastValue.text = getString(if (snapshot.multicastLocked) R.string.status_locked else R.string.status_unlocked)
     binding.statusError.isVisible = snapshot.lastError.isNotBlank()
     binding.statusError.text = snapshot.lastError
     renderPermissionButton()
@@ -537,6 +538,7 @@ class PlayerActivity : ComponentActivity() {
   private fun renderPermissionButton() {
     val visible = !hasSetupPermissions()
     binding.permissionRow.isVisible = visible
+    binding.guideLayout.isVisible = !visible
     binding.statusState.isVisible = !visible
     if (visible && !binding.permissionButton.isFocused) binding.permissionButton.requestFocus()
   }
@@ -627,7 +629,7 @@ class PlayerActivity : ComponentActivity() {
 private fun playbackTime(time: Long): Long = if (time == C.TIME_UNSET || time < 0L) 0L else time
 
 internal data class Snapshot(
-  val uuid: String = "", val ipAddress: String = "0.0.0.0", val httpPort: Int = 0, val wifiName: String = "未获取",
+  val uuid: String = "", val ipAddress: String = "0.0.0.0", val httpPort: Int = 0, val wifiName: String = "",
   val serviceRunning: Boolean = false, val multicastLocked: Boolean = false, val currentUri: String = "",
   val transportState: TransportState = TransportState.NoMedia, val lastError: String = "", val positionMs: Long = 0L,
   val durationMs: Long = 0L, val volume: Int = 100, val muted: Boolean = false,
