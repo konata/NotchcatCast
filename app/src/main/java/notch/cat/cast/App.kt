@@ -64,10 +64,6 @@ private fun Context.openPlayerPage() {
   if (hasNotificationPermission()) notifyOpenPlayer() else Log.w(Consts.App.TAG, "cannot notify player open: missing POST_NOTIFICATIONS")
 }
 private fun Context.notifyOpenPlayer() {
-  if (!hasNotificationPermission()) {
-    Log.w(Consts.App.TAG, "cannot notify player open: missing POST_NOTIFICATIONS")
-    return
-  }
   val notifications = getSystemService(NotificationManager::class.java) ?: return
   notifications.createNotificationChannel(NotificationChannel(Consts.App.OPEN_PLAYER_CHANNEL_ID, getString(R.string.notification_open_channel), NotificationManager.IMPORTANCE_DEFAULT))
   val intent = PendingIntent.getActivity(this, 0, playerIntent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -156,7 +152,7 @@ class ReceiverService : Service() {
     dlna = null
     runCatching { multicastLock?.release() }
     multicastLock = null
-    Runtime.server(running = false, multicastLocked = false)
+    Runtime.server(running = false)
     scope.cancel()
     super.onDestroy()
   }
@@ -176,7 +172,7 @@ class ReceiverService : Service() {
 
   private fun startReceivers() {
     if (dlna != null) {
-      Runtime.server(running = true, wifiName = applicationContext.wifiName(), multicastLocked = multicastLock?.isHeld == true)
+      Runtime.server(running = true, wifiName = applicationContext.wifiName())
       return
     }
     multicastLock = applicationContext.getSystemService(WifiManager::class.java)?.createMulticastLock("NotchCatCastDlnaMulticast")?.apply {
@@ -189,9 +185,7 @@ class ReceiverService : Service() {
     this.dlna = dlna
     this.mirror = mirror
     airplay = AirplayReceiver(applicationContext, endpoint.uuid, mirror) { PlayerLink.send(this, it) }.also { it.start(scope) }
-    Runtime.server(
-      running = true, uuid = endpoint.uuid, ipAddress = endpoint.ipAddress, httpPort = endpoint.httpPort, wifiName = applicationContext.wifiName(), multicastLocked = multicastLock?.isHeld == true
-    )
+    Runtime.server(running = true, ipAddress = endpoint.ipAddress, wifiName = applicationContext.wifiName())
   }
 
   private fun notification(): Notification {
@@ -629,8 +623,8 @@ class PlayerActivity : ComponentActivity() {
 private fun playbackTime(time: Long): Long = if (time == C.TIME_UNSET || time < 0L) 0L else time
 
 internal data class Snapshot(
-  val uuid: String = "", val ipAddress: String = "0.0.0.0", val httpPort: Int = 0, val wifiName: String = "",
-  val serviceRunning: Boolean = false, val multicastLocked: Boolean = false, val currentUri: String = "",
+  val ipAddress: String = "0.0.0.0", val wifiName: String = "",
+  val serviceRunning: Boolean = false, val currentUri: String = "",
   val transportState: TransportState = TransportState.NoMedia, val lastError: String = "", val positionMs: Long = 0L,
   val durationMs: Long = 0L, val volume: Int = 100, val muted: Boolean = false,
 ) {
@@ -650,12 +644,9 @@ internal object Runtime {
 
   fun server(
     running: Boolean,
-    uuid: String = state.value.uuid,
     ipAddress: String = state.value.ipAddress,
-    httpPort: Int = state.value.httpPort,
     wifiName: String = state.value.wifiName,
-    multicastLocked: Boolean = state.value.multicastLocked
-  ) = state.update { it.copy(serviceRunning = running, uuid = uuid, ipAddress = ipAddress, httpPort = httpPort, wifiName = wifiName, multicastLocked = multicastLocked) }
+  ) = state.update { it.copy(serviceRunning = running, ipAddress = ipAddress, wifiName = wifiName) }
 
   fun error(message: String, throwable: Throwable? = null) {
     if (throwable != null) Log.e(Consts.App.TAG, message, throwable) else Log.e(Consts.App.TAG, message)

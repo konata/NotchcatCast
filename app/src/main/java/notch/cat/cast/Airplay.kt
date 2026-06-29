@@ -42,7 +42,6 @@ import java.net.URI
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicLong
 
 class AirplayReceiver(private val context: Context, private val uuid: String, private val mirror: MirrorStream, private val send: (PlaybackCommand) -> Unit) {
   private val session = AirplaySession(uuid)
@@ -78,7 +77,7 @@ class AirplayReceiver(private val context: Context, private val uuid: String, pr
     run.unpublish()
     runCatching { run.rtsp.close() }
     run.mirror.stop()
-    closeAudio(run.audio)
+    run.audio.stop()
     run.timing.stop()
     mirror.stop()
   }
@@ -200,19 +199,12 @@ class AirplayReceiver(private val context: Context, private val uuid: String, pr
 
   private fun teardown(request: RtspRequest): RtspResponse {
     val types = streamTypes(request.body)
-    if (types.isEmpty() || types.any { it in Consts.Airplay.TYPE_AUDIO }) closeAudio(running?.audio)
+    if (types.isEmpty() || types.any { it in Consts.Airplay.TYPE_AUDIO }) running?.audio?.stop()
     if (types.isEmpty() || Consts.Airplay.TYPE_MIRROR in types) {
       mirror.stop()
       send(PlaybackCommand.StopMirror)
     }
     return RtspResponse(200, "OK", extraHeaders = mapOf("Session" to "1", "Connection" to "close"), close = true)
-  }
-
-  private fun closeAudio(audio: AirplayAudioSink?) {
-    audio?.counts?.takeIf { (media, control) -> media > 0 || control > 0 }?.let { (media, control) ->
-      Log.i(Consts.Airplay.TAG, "Airplay audio stopped media=$media control=$control")
-    }
-    audio?.stop()
   }
 
   private fun mirrorPacket(event: MirrorEvent) {
@@ -420,15 +412,12 @@ private class AirplaySession(uuid: String) {
 
 private class AirplayAudioSink(private val scope: CoroutineScope) {
   private var sockets: Pair<DatagramSocket, DatagramSocket>? = null
-  private val mediaPackets = AtomicLong()
-  private val controlPackets = AtomicLong()
-  val counts get() = mediaPackets.get() to controlPackets.get()
 
   fun ports(type: Int): AirplayPorts {
     val (media, control) = sockets ?: (DatagramSocket(0) to DatagramSocket(0)).also {
       sockets = it
-      drain(it.first, mediaPackets)
-      drain(it.second, controlPackets)
+      drain(it.first)
+      drain(it.second)
     }
     return AirplayPorts(type, media.localPort, control.localPort)
   }
@@ -441,14 +430,14 @@ private class AirplayAudioSink(private val scope: CoroutineScope) {
     sockets = null
   }
 
-  private fun drain(socket: DatagramSocket, counter: AtomicLong) {
+  // ponytail: audio is received and discarded; drain just keeps the socket buffer clear
+  private fun drain(socket: DatagramSocket) {
     scope.launch {
       val packet = DatagramPacket(ByteArray(2048), 2048)
       while (isActive && !socket.isClosed) {
         try {
           packet.length = packet.data.size
           socket.receive(packet)
-          counter.incrementAndGet()
         } catch (_: SocketException) {
           return@launch
         }
