@@ -1,6 +1,23 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:angle="270"
-        android:endColor="#08090E"
-        android:startColor="#141829" />
-</shape>
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient
+                android:angle="270"
+                android:startColor="#0E1512"
+                android:centerColor="#0A0E0D"
+                android:endColor="#05080A" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:type="radial"
+                android:centerX="0.30"
+                android:centerY="0.40"
+                android:gradientRadius="640dp"
+                android:startColor="#243DDC97"
+                android:endColor="#003DDC97" />
+        </shape>
+    </item>
+</layer-list>
