@@ -15,24 +15,13 @@
     <string name="volume_value">Volume %1$d%%</string>
     <string name="volume_muted">Muted</string>
     <string name="landing_caption">Standing by, waiting to cast your favorite content to the TV.</string>
-    <string name="status_panel_title">Connection Status</string>
-    <string name="status_panel_subtitle">Make sure your phone and TV are on the same network</string>
     <string name="status_ready">Ready</string>
     <string name="status_starting">Starting</string>
     <string name="status_error_state">Action Required</string>
-    <string name="status_wifi_label">Wi-Fi</string>
-    <string name="status_address_label">IP Address</string>
-    <string name="status_service_label">Service</string>
-    <string name="status_multicast_label">Multicast</string>
-    <string name="status_running">Running</string>
-    <string name="status_stopped">Stopped</string>
-    <string name="status_locked">Ready</string>
-    <string name="status_unlocked">Not Ready</string>
     <string name="notification_service_text">Waiting to cast</string>
     <string name="notification_open_title">Cast request received</string>
     <string name="notification_open_text">Click to open player and resume playback</string>
     <string name="notification_open_channel">Cast Reminders</string>
-    <string name="permission_button_text">Enable full cast permissions</string>
 
     <!-- Newly extracted strings -->
     <string name="status_wifi_unacquired">Not Acquired</string>
