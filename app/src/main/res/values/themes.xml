@@ -14,9 +14,9 @@
     </style>
 
     <style name="CardIcon">
-        <item name="android:layout_width">28dp</item>
-        <item name="android:layout_height">28dp</item>
-        <item name="android:layout_marginEnd">20dp</item>
+        <item name="android:layout_width">32dp</item>
+        <item name="android:layout_height">32dp</item>
+        <item name="android:layout_marginEnd">18dp</item>
         <item name="android:scaleType">fitCenter</item>
     </style>
 
@@ -30,8 +30,8 @@
     <style name="CardLabel">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">#8A968D</item>
-        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">#8C8273</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:letterSpacing">0.02</item>
         <item name="android:includeFontPadding">false</item>
     </style>
@@ -39,7 +39,7 @@
     <style name="CardValue">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">#F3F6F4</item>
+        <item name="android:textColor">#241F18</item>
         <item name="android:textSize">18sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:layout_marginTop">3dp</item>

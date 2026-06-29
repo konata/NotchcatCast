@@ -56,9 +56,9 @@
                 android:layout_height="104dp"
                 android:background="@drawable/mangmang_frame_background"
                 android:contentDescription="@string/application_name"
-                android:padding="18dp"
+                android:padding="16dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_cat_pixel_sharp" />
+                android:src="@drawable/ic_cat_foreground" />
 
             <TextView
                 android:id="@+id/status_title"
@@ -67,7 +67,7 @@
                 android:layout_marginTop="28dp"
                 android:includeFontPadding="false"
                 android:text="@string/application_name"
-                android:textColor="#F4F7F5"
+                android:textColor="#241F18"
                 android:textSize="46sp"
                 android:textStyle="bold" />
 
@@ -79,7 +79,7 @@
                 android:includeFontPadding="false"
                 android:letterSpacing="0.14"
                 android:text="@string/application_subtitle"
-                android:textColor="#7E8C84"
+                android:textColor="#8C8273"
                 android:textSize="16sp" />
 
             <TextView
@@ -93,7 +93,7 @@
                 android:gravity="center"
                 android:paddingStart="16dp"
                 android:paddingEnd="18dp"
-                android:textColor="#CFEEE0"
+                android:textColor="#985A24"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -106,7 +106,7 @@
                 android:lineSpacingExtra="5dp"
                 android:maxWidth="420dp"
                 android:text="@string/landing_caption"
-                android:textColor="#6C7A72"
+                android:textColor="#8C8273"
                 android:textSize="16sp" />
         </LinearLayout>
 
@@ -131,7 +131,7 @@
                     <ImageView
                         style="@style/CardIcon"
                         android:src="@drawable/ic_wifi"
-                        android:tint="#3DDC97" />
+                        android:tint="#C77A38" />
 
                     <LinearLayout style="@style/CardTextStack">
                         <TextView
@@ -155,7 +155,7 @@
                     <ImageView
                         style="@style/CardIcon"
                         android:src="@drawable/ic_network"
-                        android:tint="#3DDC97" />
+                        android:tint="#C77A38" />
 
                     <LinearLayout style="@style/CardTextStack">
                         <TextView
@@ -189,7 +189,7 @@
                         <ImageView
                             style="@style/CardIcon"
                             android:src="@drawable/ic_cast"
-                            android:tint="#3DDC97" />
+                            android:tint="#C77A38" />
 
                         <LinearLayout style="@style/CardTextStack">
                             <TextView
@@ -230,7 +230,7 @@
                             <ImageView
                                 style="@style/CardIcon"
                                 android:src="@drawable/ic_warning"
-                                android:tint="#FFC36A" />
+                                android:tint="#C0392B" />
 
                             <LinearLayout style="@style/CardTextStack">
                                 <TextView
@@ -255,7 +255,7 @@
                 android:lineSpacingExtra="3dp"
                 android:paddingHorizontal="18dp"
                 android:paddingVertical="12dp"
-                android:textColor="#F2C9C2"
+                android:textColor="#A23A33"
                 android:textSize="13sp"
                 android:visibility="gone" />
         </LinearLayout>
@@ -308,11 +308,11 @@
             android:layout_width="match_parent"
             android:layout_height="3dp"
             android:layout_marginTop="10dp"
-            android:indeterminateTint="#3DDC97"
+            android:indeterminateTint="#C77A38"
             android:max="10000"
             android:progress="0"
             android:progressBackgroundTint="#553D454D"
-            android:progressTint="#3DDC97"
+            android:progressTint="#C77A38"
             android:secondaryProgress="0" />
     </LinearLayout>
 </FrameLayout>

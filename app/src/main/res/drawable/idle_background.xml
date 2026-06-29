@@ -4,20 +4,20 @@
         <shape>
             <gradient
                 android:angle="270"
-                android:startColor="#0E1512"
-                android:centerColor="#0A0E0D"
-                android:endColor="#05080A" />
+                android:startColor="#F8F4EC"
+                android:centerColor="#F3ECDE"
+                android:endColor="#ECE2D0" />
         </shape>
     </item>
     <item>
         <shape>
             <gradient
                 android:type="radial"
-                android:centerX="0.30"
+                android:centerX="0.28"
                 android:centerY="0.40"
                 android:gradientRadius="640dp"
-                android:startColor="#243DDC97"
-                android:endColor="#003DDC97" />
+                android:startColor="#40FFFFFF"
+                android:endColor="#00FFFFFF" />
         </shape>
     </item>
 </layer-list>
