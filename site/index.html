@@ -15,31 +15,32 @@
 <body>
   <header class="masthead">
     <a class="brand" href="#top">
-      <img class="brand-cat" src="assets/cat.png" alt="莽莽" width="40" height="40">
-      <span class="brand-name">莽莽投屏</span>
+      <img class="brand-cat" src="assets/cat.png" alt="" width="40" height="40">
+      <span class="brand-name" data-i18n="brand">莽莽投屏</span>
     </a>
     <nav class="nav">
-      <a href="#features">功能</a>
-      <a href="#tested">兼容</a>
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#tested" data-i18n="nav.compat">兼容</a>
       <a class="nav-ghost" href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener">GitHub</a>
-      <a class="nav-cta" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener">下载</a>
+      <a id="lang-toggle" class="nav-lang" href="#" role="button" aria-label="Switch language"></a>
+      <a class="nav-cta" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener" data-i18n="nav.download">下载</a>
     </nav>
   </header>
 
   <main id="top">
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">DLNA · AIRPLAY 投屏接收端</p>
-        <h1>把视频,干净地<br>投上电视。</h1>
-        <p class="lede">手机视频 App 投过来,电视上原样播放。不插广告,不夹带。</p>
+        <p class="eyebrow" data-i18n="hero.eyebrow">DLNA · AIRPLAY 投屏接收端</p>
+        <h1 data-i18n="hero.h1">把视频,干净地<br>投上电视。</h1>
+        <p class="lede" data-i18n="hero.lede">手机视频 App 投过来,电视上原样播放。不插广告,不夹带。</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener">下载最新 APK</a>
-          <a class="btn btn-ghost" href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener">查看源码</a>
+          <a class="btn btn-primary" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener" data-i18n="cta.download">下载最新 APK</a>
+          <a class="btn btn-ghost" href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener" data-i18n="cta.source">查看源码</a>
         </div>
         <ul class="hero-meta">
-          <li>Android TV / Google TV</li>
-          <li>仅本地网络</li>
-          <li>开源 · 无追踪</li>
+          <li data-i18n="meta.platform">Android TV / Google TV</li>
+          <li data-i18n="meta.local">仅本地网络</li>
+          <li data-i18n="meta.oss">开源 · 无追踪</li>
         </ul>
       </div>
 
@@ -48,25 +49,25 @@
           <div class="tv-idle">
             <div class="idle-hero">
               <img class="idle-cat" src="assets/cat.png" alt="" width="64" height="64">
-              <div class="idle-title">莽莽投屏</div>
+              <div class="idle-title" data-i18n="mock.title">莽莽投屏</div>
               <div class="idle-subtitle">Notch Cat Cast</div>
-              <div class="idle-pill"><span class="idle-dot"></span>待连接</div>
-              <div class="idle-caption">安静待命,等你把喜欢的内容送到电视上。</div>
+              <div class="idle-pill"><span class="idle-dot"></span><span data-i18n="mock.ready">待连接</span></div>
+              <div class="idle-caption" data-i18n="mock.caption">安静待命,等你把喜欢的内容送到电视上。</div>
             </div>
             <div class="idle-panel">
               <div class="panel-row">
                 <svg class="panel-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.07 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.35-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.86 9.14 5 13z"/></svg>
-                <div class="panel-text"><div class="panel-label">当前 Wi-Fi</div><div class="panel-value">MaoMao-5G</div></div>
+                <div class="panel-text"><div class="panel-label" data-i18n="mock.wifi">当前 Wi-Fi</div><div class="panel-value">MaoMao-5G</div></div>
               </div>
               <div class="panel-div"></div>
               <div class="panel-row">
                 <svg class="panel-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-                <div class="panel-text"><div class="panel-label">设备 IP 地址</div><div class="panel-value">192.168.1.23</div></div>
+                <div class="panel-text"><div class="panel-label" data-i18n="mock.ip">设备 IP 地址</div><div class="panel-value">192.168.1.23</div></div>
               </div>
               <div class="panel-div"></div>
               <div class="panel-row">
                 <svg class="panel-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.92-11-11-11z"/></svg>
-                <div class="panel-text"><div class="panel-label">投屏指南</div><div class="panel-value">选择「莽莽投屏」即可开始</div></div>
+                <div class="panel-text"><div class="panel-label" data-i18n="mock.guide">投屏指南</div><div class="panel-value" data-i18n="mock.guideValue">选择「莽莽投屏」即可开始</div></div>
               </div>
             </div>
           </div>
@@ -76,43 +77,43 @@
     </section>
 
     <section id="features" class="section">
-      <p class="section-label">功能</p>
-      <h2 class="section-title">该有的都有,多余的都没有</h2>
+      <p class="section-label" data-i18n="feat.label">功能</p>
+      <h2 class="section-title" data-i18n="feat.title">该有的都有,多余的都没有</h2>
       <div class="cards">
         <article class="card">
-          <h3>一搜就在</h3>
-          <p>手机视频 App 里点投屏,列表里就能看到莽莽,选中即连。</p>
+          <h3 data-i18n="feat.c1.h">一搜就在</h3>
+          <p data-i18n="feat.c1.p">手机视频 App 里点投屏,列表里就能看到莽莽,选中即连。</p>
         </article>
         <article class="card">
-          <h3>遥控就能控</h3>
-          <p>播放、暂停、跳转、音量、静音,全交给电视遥控器。</p>
+          <h3 data-i18n="feat.c2.h">遥控就能控</h3>
+          <p data-i18n="feat.c2.p">播放、暂停、跳转、音量、静音,全交给电视遥控器。</p>
         </article>
         <article class="card card-quiet">
-          <h3>纪念莽莽</h3>
-          <p>图标这只狸花猫叫莽莽,耳朵的缺口,是打架留下的。</p>
+          <h3 data-i18n="feat.c3.h">纪念莽莽</h3>
+          <p data-i18n="feat.c3.p">图标这只狸花猫叫莽莽,耳朵的缺口,是打架留下的。</p>
         </article>
       </div>
     </section>
 
     <section id="tested" class="section">
-      <p class="section-label">兼容</p>
-      <h2 class="section-title">和这些 App 处得来</h2>
+      <p class="section-label" data-i18n="test.label">兼容</p>
+      <h2 class="section-title" data-i18n="test.title">和这些 App 处得来</h2>
       <ul class="apps">
         <li>哔哩哔哩</li>
         <li>芒果 TV</li>
         <li>优酷</li>
         <li>腾讯视频</li>
-        <li class="apps-more">还有更多…</li>
+        <li class="apps-more" data-i18n="test.more">还有更多…</li>
       </ul>
     </section>
 
     <section class="download">
       <div class="download-inner">
-        <h2>把莽莽接回电视</h2>
-        <p>装到 Android TV / Google TV,和手机连同一个 Wi-Fi,在视频 App 里就能投。</p>
+        <h2 data-i18n="dl.title">把莽莽接回电视</h2>
+        <p data-i18n="dl.p">装到 Android TV / Google TV,和手机连同一个 Wi-Fi,在视频 App 里就能投。</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener">下载最新 APK</a>
-          <a class="btn btn-ghost" href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener">GitHub 仓库</a>
+          <a class="btn btn-primary" href="https://github.com/konata/NotchcatCast/releases/latest/download/NotchCatCast-debug.apk" target="_blank" rel="noopener" data-i18n="cta.download">下载最新 APK</a>
+          <a class="btn btn-ghost" href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener" data-i18n="cta.repo">GitHub 仓库</a>
         </div>
       </div>
     </section>
@@ -120,13 +121,79 @@
 
   <footer class="footer">
     <div class="footer-memo">
-      <img src="assets/cat.png" alt="莽莽" width="44" height="44">
-      <p>莽莽,一只很好的猫。<br>我们很想它。</p>
+      <img src="assets/cat.png" alt="" width="44" height="44">
+      <p data-i18n="footer.memo">莽莽,一只很好的猫。<br>我们很想它。</p>
     </div>
     <div class="footer-links">
       <a href="https://github.com/konata/NotchcatCast" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/konata/NotchcatCast/releases/latest" target="_blank" rel="noopener">Releases</a>
     </div>
   </footer>
+
+  <script>
+    const I18N = {
+      zh: {
+        brand: "莽莽投屏",
+        "nav.features": "功能", "nav.compat": "兼容", "nav.download": "下载",
+        "hero.eyebrow": "DLNA · AIRPLAY 投屏接收端",
+        "hero.h1": "把视频,干净地<br>投上电视。",
+        "hero.lede": "手机视频 App 投过来,电视上原样播放。不插广告,不夹带。",
+        "cta.download": "下载最新 APK", "cta.source": "查看源码", "cta.repo": "GitHub 仓库",
+        "meta.platform": "Android TV / Google TV", "meta.local": "仅本地网络", "meta.oss": "开源 · 无追踪",
+        "mock.title": "莽莽投屏", "mock.ready": "待连接",
+        "mock.wifi": "当前 Wi-Fi", "mock.ip": "设备 IP 地址",
+        "mock.guide": "投屏指南", "mock.guideValue": "选择「莽莽投屏」即可开始",
+        "mock.caption": "安静待命,等你把喜欢的内容送到电视上。",
+        "feat.label": "功能", "feat.title": "该有的都有,多余的都没有",
+        "feat.c1.h": "一搜就在", "feat.c1.p": "手机视频 App 里点投屏,列表里就能看到莽莽,选中即连。",
+        "feat.c2.h": "遥控就能控", "feat.c2.p": "播放、暂停、跳转、音量、静音,全交给电视遥控器。",
+        "feat.c3.h": "纪念莽莽", "feat.c3.p": "图标这只狸花猫叫莽莽,耳朵的缺口,是打架留下的。",
+        "test.label": "兼容", "test.title": "和这些 App 处得来", "test.more": "还有更多…",
+        "dl.title": "把莽莽接回电视", "dl.p": "装到 Android TV / Google TV,和手机连同一个 Wi-Fi,在视频 App 里就能投。",
+        "footer.memo": "莽莽,一只很好的猫。<br>我们很想它。"
+      },
+      en: {
+        brand: "Notch Cat",
+        "nav.features": "Features", "nav.compat": "Compatibility", "nav.download": "Download",
+        "hero.eyebrow": "DLNA · AIRPLAY CAST RECEIVER",
+        "hero.h1": "Cast video to your TV,<br>cleanly.",
+        "hero.lede": "Cast from your phone's video apps and it plays as-is on the TV. No ads, nothing injected.",
+        "cta.download": "Download latest APK", "cta.source": "View source", "cta.repo": "GitHub repo",
+        "meta.platform": "Android TV / Google TV", "meta.local": "Local network only", "meta.oss": "Open source · No tracking",
+        "mock.title": "Notch Cat", "mock.ready": "Ready",
+        "mock.wifi": "Current Wi-Fi", "mock.ip": "Device IP Address",
+        "mock.guide": "How to Cast", "mock.guideValue": "Select “Notch Cat Cast”",
+        "mock.caption": "Standing by, waiting to cast your favorite content to the TV.",
+        "feat.label": "Features", "feat.title": "Everything you need, nothing you don't",
+        "feat.c1.h": "Just there", "feat.c1.p": "Tap cast in your phone's video app — Notch Cat shows up in the list, select to connect.",
+        "feat.c2.h": "Drive it with the remote", "feat.c2.p": "Play, pause, seek, volume, mute — all from the TV remote.",
+        "feat.c3.h": "In memory of MangMang", "feat.c3.p": "The tabby in the icon is MangMang; the notch in the ear is from a fight.",
+        "test.label": "Compatibility", "test.title": "Plays nice with these apps", "test.more": "and more…",
+        "dl.title": "Bring Notch Cat to your TV", "dl.p": "Install on Android TV / Google TV, join the same Wi-Fi as your phone, and cast from any video app.",
+        "footer.memo": "MangMang, a very good cat.<br>We miss him."
+      }
+    };
+    const META = {
+      zh: { title: "莽莽投屏 · Notch Cat Cast", desc: "面向 Android TV / Google TV 的 DLNA 投屏接收端,干净、无广告,附带实验性的 AirPlay URL 接收。" },
+      en: { title: "Notch Cat Cast", desc: "A clean, ad-free DLNA cast receiver for Android TV / Google TV, with experimental AirPlay URL receiving." }
+    };
+    function applyLang(lang) {
+      document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+      document.title = META[lang].title;
+      document.querySelector('meta[name="description"]').content = META[lang].desc;
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const value = I18N[lang][el.dataset.i18n];
+        if (value != null) el.innerHTML = value;
+      });
+      document.getElementById("lang-toggle").textContent = lang === "zh" ? "EN" : "中文";
+      localStorage.setItem("lang", lang);
+    }
+    const saved = localStorage.getItem("lang");
+    applyLang(saved || ((navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en"));
+    document.getElementById("lang-toggle").addEventListener("click", event => {
+      event.preventDefault();
+      applyLang(document.documentElement.lang.startsWith("zh") ? "en" : "zh");
+    });
+  </script>
 </body>
 </html>
