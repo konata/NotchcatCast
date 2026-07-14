@@ -210,7 +210,7 @@ class PlayerActivity : ComponentActivity() {
   private var mirrorSink: MirrorSink? = null
   private var mirrorJob: Job? = null
   private var connectionRefreshJob: Job? = null
-  private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+  private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
     refreshConnectionStatus()
     scheduleConnectionRefresh()
   }
@@ -501,8 +501,9 @@ class PlayerActivity : ComponentActivity() {
   private fun requestNextPermission() {
     renderPermissionButton()
     when {
-      !hasWifiNamePermission() -> permissionLauncher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
-      !hasNotificationPermission() -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      !hasNearbyWifiPermission() -> permissionLauncher.launch(arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES))
+      !hasLocationPermission() -> permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+      !hasNotificationPermission() -> permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
 
       !hasOverlayPermission() -> {
         runCatching {

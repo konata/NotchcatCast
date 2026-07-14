@@ -28,7 +28,9 @@ private fun Context.hasRuntimePermission(permission: String): Boolean {
   return mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_FOREGROUND
 }
 
-internal fun Context.hasWifiNamePermission() = hasRuntimePermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+internal fun Context.hasNearbyWifiPermission() = hasRuntimePermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+internal fun Context.hasLocationPermission() = hasRuntimePermission(Manifest.permission.ACCESS_FINE_LOCATION)
+internal fun Context.hasWifiNamePermission() = hasNearbyWifiPermission() && hasLocationPermission()
 internal fun Context.hasNotificationPermission() = hasRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
 internal fun Context.hasOverlayPermission() = Settings.canDrawOverlays(this)
 internal fun Context.hasSetupPermissions() = hasWifiNamePermission() && hasNotificationPermission() && hasOverlayPermission()
