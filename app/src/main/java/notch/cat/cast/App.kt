@@ -15,6 +15,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Binder
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
@@ -138,7 +139,9 @@ class ReceiverService : Service() {
 
   override fun onCreate() {
     super.onCreate()
-    startForeground(Consts.App.SERVICE_NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+    val notice = notification()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(Consts.App.SERVICE_NOTIFICATION_ID, notice, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+    else startForeground(Consts.App.SERVICE_NOTIFICATION_ID, notice)
     startReceivers()
   }
 

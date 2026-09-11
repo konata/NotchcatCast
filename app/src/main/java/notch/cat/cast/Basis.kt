@@ -11,7 +11,16 @@ import kotlin.math.roundToInt
 
 internal fun deviceId(uuid: String) = uuid.replace("-", "").take(12).chunked(2).joinToString(":") { it.uppercase(Locale.US) }
 internal fun httpDate(): String = DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC))
-internal fun InputStream.bytes(size: Int) = readNBytes(size).takeIf { it.size == size }
+internal fun InputStream.bytes(size: Int): ByteArray? {
+  val out = ByteArray(size)
+  var read = 0
+  while (read < size) {
+    val count = read(out, read, size - read)
+    if (count < 0) return null
+    read += count
+  }
+  return out
+}
 internal fun ByteArray.intLe(offset: Int) = ByteBuffer.wrap(this, offset, Int.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN).int
 internal fun ByteArray.shortLe(offset: Int) = java.lang.Short.toUnsignedInt(ByteBuffer.wrap(this, offset, Short.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN).short)
 internal fun ByteArray.shortBe(offset: Int) = java.lang.Short.toUnsignedInt(ByteBuffer.wrap(this, offset, Short.SIZE_BYTES).short)

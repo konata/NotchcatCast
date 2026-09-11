@@ -13,6 +13,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Size
@@ -24,14 +25,17 @@ import kotlin.coroutines.resume
 private fun Context.hasRuntimePermission(permission: String): Boolean {
   if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) return false
   val op = AppOpsManager.permissionToOp(permission) ?: return true
-  val mode = getSystemService(AppOpsManager::class.java)?.unsafeCheckOpNoThrow(op, applicationInfo.uid, packageName) ?: AppOpsManager.MODE_ALLOWED
+  val appOps = getSystemService(AppOpsManager::class.java) ?: return true
+  val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) appOps.unsafeCheckOpNoThrow(op, applicationInfo.uid, packageName) else appOps.checkOpNoThrow(op, applicationInfo.uid, packageName)
   return mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_FOREGROUND
 }
 
-internal fun Context.hasNearbyWifiPermission() = hasRuntimePermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+internal fun Context.hasNearbyWifiPermission() =
+  Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasRuntimePermission(Manifest.permission.NEARBY_WIFI_DEVICES)
 internal fun Context.hasLocationPermission() = hasRuntimePermission(Manifest.permission.ACCESS_FINE_LOCATION)
 internal fun Context.hasWifiNamePermission() = hasNearbyWifiPermission() && hasLocationPermission()
-internal fun Context.hasNotificationPermission() = hasRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
+internal fun Context.hasNotificationPermission() =
+  Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
 internal fun Context.hasOverlayPermission() = Settings.canDrawOverlays(this)
 internal fun Context.hasSetupPermissions() = hasWifiNamePermission() && hasNotificationPermission() && hasOverlayPermission()
 internal fun Context.cancelOpenPlayerNotification() = getSystemService(NotificationManager::class.java)?.cancel(Consts.App.OPEN_PLAYER_NOTIFICATION_ID)
@@ -42,7 +46,8 @@ internal fun Context.wifiName(): String {
   val connectivityManager = getSystemService(ConnectivityManager::class.java)
   val capabilities = connectivityManager?.getNetworkCapabilities(connectivityManager.activeNetwork)
   if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) return "Ethernet"
-  val raw = (capabilities?.transportInfo as? WifiInfo)?.ssid ?: getSystemService(WifiManager::class.java)?.connectionInfo?.ssid ?: ""
+  val raw = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) capabilities?.transportInfo as? WifiInfo else null)?.ssid
+    ?: getSystemService(WifiManager::class.java)?.connectionInfo?.ssid ?: ""
   return raw.trim().removeSurrounding("\"").replace('\n', ' ').replace('\r', ' ').takeUnless { it.isBlank() || it.equals("<unknown ssid>", ignoreCase = true) } ?: getString(R.string.status_wifi_unacquired)
 }
 

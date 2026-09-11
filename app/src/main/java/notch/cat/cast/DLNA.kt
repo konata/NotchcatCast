@@ -57,7 +57,7 @@ internal object Http {
     val lines = String(headerBytes.toByteArray(), Charsets.ISO_8859_1).split("\r\n").filter { it.isNotEmpty() }
     val request = lines.firstOrNull()?.split(" ", limit = 3)?.takeIf { it.size >= 2 } ?: return null
     val headers = parseHeaders(lines.drop(1))
-    val body = input.readNBytes(headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0).toString(Charsets.UTF_8)
+    val body = input.bytes(headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0)?.toString(Charsets.UTF_8) ?: return null
     return Request(request[0].uppercase(Locale.US), request[1], headers, body)
   }
 

@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId "notch.cat.cast"
-        minSdk 34
+        minSdk 27
         targetSdk 35
-        versionCode 12
-        versionName "1.0.11"
+        versionCode 13
+        versionName "1.0.12"
         ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }
         resConfigs "en"
         resConfigs "xxhdpi"
