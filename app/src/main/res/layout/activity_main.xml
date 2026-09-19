@@ -38,7 +38,8 @@
         android:baselineAligned="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="80dp"
+        android:paddingStart="80dp"
+        android:paddingEnd="80dp"
         android:paddingVertical="48dp">
 
         <!-- Left: brand hero -->
@@ -221,7 +222,8 @@
                             android:focusableInTouchMode="true"
                             android:gravity="center_vertical"
                             android:orientation="horizontal"
-                            android:paddingHorizontal="16dp"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
                             android:nextFocusDown="@id/permission_button"
                             android:nextFocusLeft="@id/permission_button"
                             android:nextFocusRight="@id/permission_button"
@@ -253,7 +255,8 @@
                 android:layout_marginTop="14dp"
                 android:background="@drawable/status_error"
                 android:lineSpacingExtra="3dp"
-                android:paddingHorizontal="18dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
                 android:paddingVertical="12dp"
                 android:textColor="#A23A33"
                 android:textSize="13sp"
@@ -271,7 +274,8 @@
         android:alpha="0"
         android:background="@drawable/control_bar"
         android:orientation="vertical"
-        android:paddingHorizontal="20dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
         android:paddingVertical="12dp"
         android:visibility="gone">
 
@@ -295,7 +299,7 @@
                 android:id="@+id/control_time_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="monospace"
+                android:typeface="monospace"
                 android:gravity="end"
                 android:maxLines="1"
                 android:textColor="#D8DEE6"

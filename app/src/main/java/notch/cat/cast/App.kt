@@ -28,6 +28,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -55,7 +56,7 @@ import notch.cat.cast.databinding.ActivityMainBinding
 import kotlin.coroutines.cancellation.CancellationException
 
 private fun Context.playerIntent() = Intent(this, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-private fun Context.startReceiver() = runCatching { startForegroundService(Intent(this, ReceiverService::class.java)) }.onFailure { Log.e(Consts.App.TAG, "start receiver failed", it) }
+private fun Context.startReceiver() = runCatching { ContextCompat.startForegroundService(this, Intent(this, ReceiverService::class.java)) }.onFailure { Log.e(Consts.App.TAG, "start receiver failed", it) }
 private fun Context.openPlayerPage() {
   val opened = runCatching {
     startActivity(playerIntent())
@@ -66,9 +67,12 @@ private fun Context.openPlayerPage() {
 }
 private fun Context.notifyOpenPlayer() {
   val notifications = getSystemService(NotificationManager::class.java) ?: return
-  notifications.createNotificationChannel(NotificationChannel(Consts.App.OPEN_PLAYER_CHANNEL_ID, getString(R.string.notification_open_channel), NotificationManager.IMPORTANCE_DEFAULT))
+  val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    notifications.createNotificationChannel(NotificationChannel(Consts.App.OPEN_PLAYER_CHANNEL_ID, getString(R.string.notification_open_channel), NotificationManager.IMPORTANCE_DEFAULT))
+    Notification.Builder(this, Consts.App.OPEN_PLAYER_CHANNEL_ID)
+  } else Notification.Builder(this)
   val intent = PendingIntent.getActivity(this, 0, playerIntent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-  val notification = Notification.Builder(this, Consts.App.OPEN_PLAYER_CHANNEL_ID).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.notification_open_title))
+  val notification = builder.setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.notification_open_title))
     .setContentText(getString(R.string.notification_open_text)).setContentIntent(intent).setAutoCancel(true).setCategory(Notification.CATEGORY_STATUS).build()
   notifications.notify(Consts.App.OPEN_PLAYER_NOTIFICATION_ID, notification)
 }
@@ -193,9 +197,12 @@ class ReceiverService : Service() {
 
   private fun notification(): Notification {
     val notifications = getSystemService(NotificationManager::class.java)!!
-    notifications.createNotificationChannel(NotificationChannel(Consts.App.SERVICE_CHANNEL_ID, getString(R.string.application_name), NotificationManager.IMPORTANCE_LOW))
+    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      notifications.createNotificationChannel(NotificationChannel(Consts.App.SERVICE_CHANNEL_ID, getString(R.string.application_name), NotificationManager.IMPORTANCE_LOW))
+      Notification.Builder(this, Consts.App.SERVICE_CHANNEL_ID)
+    } else Notification.Builder(this)
     val intent = PendingIntent.getActivity(this, 0, playerIntent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    return Notification.Builder(this, Consts.App.SERVICE_CHANNEL_ID).setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.application_name)).setContentText(getString(R.string.notification_service_text))
+    return builder.setSmallIcon(R.mipmap.ic_launcher).setContentTitle(getString(R.string.application_name)).setContentText(getString(R.string.notification_service_text))
       .setContentIntent(intent).setOngoing(true).setCategory(Notification.CATEGORY_SERVICE).build()
   }
 }
